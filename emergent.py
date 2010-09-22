@@ -41,7 +41,7 @@ class Base(object):
 	self.proj = proj_name
 	
 	if prefix is None:
-	    prefix = '/home/wiecki/working/projects/bg3/'
+	    prefix = '/home/wiecki/working/projects/bg_inhib/'
 	self.prefix = prefix
 	self.batches = batches
 	self.data = {}
@@ -160,31 +160,10 @@ class Base(object):
 	savefig(self.plot_prefix_eps + name + ".eps")
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_ddm_tags(self, columns, plot=False, **kwargs):
-	for i,tag in enumerate(self.tags):
-	    self.ddms[tag] = self.fit_ddm_data([column[tag] for column in columns], plot=plot, tag=tag, color=self.colors[i], **kwargs)
-
-	return self.ddms_results
-    
-    def fit_ddm_data(self, columns, plot=False, tag=None, **kwargs):
-	"""Fit the diffusion drift model (fast-dm implementation) to
-        data columns provided as arguments. These are expected to be
-        dictionaries (tags as keys) of columns.
-
-	Returns the fitted parameters.
-        """
-	ddm = fastdm.Fastdm(tag=tag, params_exp=self.ddm_params, fmt=self.ddm_fmt)
-	ddm.construct_dataset(columns)
-	ddm.fit()
-	if plot:
-	    ddm.plot_params(label=tag, **kwargs)
-
-        return ddm
-
     def fit_hddm(self, depends_on, plot=False, **kwargs):
         model = hddm.HDDM_multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
         model.mcmc()
-        #column_names={'subj_idx':'batch','rt':'minus_cycles', 'response': 'error'},
+
         if plot:
             raise NotImplementedError, "TODO"
 
@@ -193,7 +172,7 @@ class Base(object):
     def fit_hlba(self, depends_on, plot=False, **kwargs):
         model = hddm.HDDM_multi_lba(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
         model.mcmc()
-        #column_names={'subj_idx':'batch','rt':'minus_cycles', 'response': 'error'},
+
         if plot:
             raise NotImplementedError, "TODO"
 
@@ -267,8 +246,8 @@ class BaseCycle(Base):
 
         if avg: # Plot average line
             y = np.mean(data, axis=0)
-            if len(data.shape) != 2:
-                debug_here()
+            if len(data.shape) == 0:
+                raise ValueError('Data array is empty.')
             if data.shape[1] != 0:
                 sem_ = sem(data, axis=0)
                 plt.fill_between(x, y-sem_, y+sem_, alpha=.5, **kwargs)

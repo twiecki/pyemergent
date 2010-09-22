@@ -17,7 +17,7 @@ import emergent
 
 
 class Saccade(emergent.Base):
-    def __init__(self, pre_trial_cue=True, intact=True, SZ=False, PD=False, **kwargs):
+    def __init__(self, pre_trial_cue=True, intact=True, SZ=False, PD=False, max_epoch=50, **kwargs):
 	super(Saccade, self).__init__(**kwargs)
 
 	# Set ddm to have fixed starting point and that drift rate
@@ -35,13 +35,13 @@ class Saccade(emergent.Base):
         self.flag['test_SSD_mode'] = 'false'
 
 	if pre_trial_cue:
-	    #self.flag['max_epoch'] = 5
+	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = True
             self.flag['DLPFC_speed_mean'] = .02
             self.flag['DLPFC_speed_std'] = 0.01 # 0.05
 
 	else:
-	    #self.flag['max_epoch'] = 50
+	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = False
             self.flag['DLPFC_speed_mean'] = .01
             self.flag['DLPFC_speed_std'] = .1 # 0.05
@@ -153,7 +153,7 @@ class Saccade(emergent.Base):
 	    plt.xlabel('Task Condition')
 	    plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
 	    plt.xlim((-0.05,.5+i))
-	    plt.ylim((0, 200))
+	    #plt.ylim((0, 200))
 
 	plt.legend(loc=0, fancybox=True)
 
@@ -277,7 +277,7 @@ class Saccade_ontrial(Saccade):
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=SZ, **kwargs)
+	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=SZ, max_epoch=500, **kwargs)
 
 
 
@@ -446,7 +446,7 @@ class SaccadeDDMSTN(SaccadeDDMBase):
          self.set_flags_condition('stn_bias', start, stop, samples)
 
 
-@pools.register_group(['saccade', 'DDM', 'compare', 'nocycle'])
+#@pools.register_group(['saccade', 'DDM', 'compare', 'nocycle'])
 class SaccadeDDMCompare(SaccadeDDMBase):
     def __init__(self, DA=0.032, DLPFC_speed_mean=0.1, **kwargs):
         super(SaccadeDDMCompare, self).__init__(**kwargs)
@@ -739,15 +739,22 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 
         # RESP_STIM
         plt.subplot(221)
-        self.plot_filled(x, Go_PS_left_left, label='left', color='r')
-        self.plot_filled(x, Go_PS_left_right, label='right', color='b')
-        plt.axvline(x=0, color='k')
-        plt.legend(loc=0)
+        try:
+            self.plot_filled(x, Go_PS_left_left, label='left', color='r')
+            self.plot_filled(x, Go_PS_left_right, label='right', color='b')
+            plt.axvline(x=0, color='k')
+            plt.legend(loc=0)
+        except ValueError:
+            pass
+                
 
         plt.subplot(222)
-        self.plot_filled(x, Go_AS_left_right, color='r')
-        self.plot_filled(x, Go_AS_right_right, color='b')
-        plt.axvline(x=0, color='k')
+        try:
+            self.plot_filled(x, Go_AS_left_right, color='r')
+            self.plot_filled(x, Go_AS_right_right, color='b')
+            plt.axvline(x=0, color='k')
+        except ValueError:
+            pass
         #plt.legend(loc=0)
 
         #plt.subplot(323)
@@ -763,15 +770,21 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         #plt.legend(loc=0)
 
         plt.subplot(223)
-        self.plot_filled(x, NoGo_PS_left_left, color='r')
-        self.plot_filled(x, NoGo_PS_left_right, color='b')
-        plt.axvline(x=0, color='k')
+        try:
+            self.plot_filled(x, NoGo_PS_left_left, color='r')
+            self.plot_filled(x, NoGo_PS_left_right, color='b')
+            plt.axvline(x=0, color='k')
+        except ValueError:
+            pass
         #plt.legend(loc=0)
 
         plt.subplot(224)
-        self.plot_filled(x, NoGo_AS_left_right, color='r')
-        self.plot_filled(x, NoGo_AS_right_right, color='b')
-        plt.axvline(x=0, color='k')
+        try:
+            self.plot_filled(x, NoGo_AS_left_right, color='r')
+            self.plot_filled(x, NoGo_AS_right_right, color='b')
+            plt.axvline(x=0, color='k')
+        except ValueError:
+            pass
         #plt.legend(loc=0)
 
 
