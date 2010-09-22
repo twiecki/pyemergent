@@ -56,9 +56,9 @@ class Base(object):
             self.log_dir = os.path.join(log_dir_abs, self.__class__.__name__)
         else:
             self.log_dir = os.path.join(self.prefix, log_dir, self.__class__.__name__)
-	self.plot_prefix_png = self.prefix + 'plots_dev/png/' + self.__class__.__name__ + '_'
-	self.plot_prefix_eps = self.prefix + 'plots_dev/eps/' + self.__class__.__name__ + '_'
-	self.plot_prefix_pdf = self.prefix + 'plots_dev/pdf/' + self.__class__.__name__ + '_'
+	self.plot_prefix_png = self.prefix + 'plots/png/' + self.__class__.__name__ + '_'
+	self.plot_prefix_eps = self.prefix + 'plots/eps/' + self.__class__.__name__ + '_'
+	self.plot_prefix_pdf = self.prefix + 'plots/pdf/' + self.__class__.__name__ + '_'
 	self.colors = ('r','b','g','y','c')
 
 	self.ddm_params = copy(fastdm.params_exp_default)

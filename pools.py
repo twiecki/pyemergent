@@ -259,7 +259,7 @@ class RegisteredModels(object):
         self.registered_models = []
         self.instantiated_models = []
         self.instantiated_models_dict = {}
-        self.prefix = '/home/wiecki/working/projects/bg3/'
+        self.prefix = '/home/wiecki/working/projects/bg_inhib/'
         #self.log_dir = None
 
     def _instantiate(self, **kwargs):
