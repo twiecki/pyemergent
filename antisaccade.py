@@ -363,109 +363,6 @@ class SaccadeDDMBase(Saccade):
         # Create tag array with tag names for every line in *_all variables
         self.tag_all = np.hstack([tag for tag in self.tags for stimulus in self.stimulus[tag]])
 
-
-    def fit_ddm_as_joint(self):
-	"""Fit the DDM to the saccade data. Pro- and antisaccade trials
-	are fit in one model.
-	"""
-	self.ddm_params['format'] = 'stimulus RESPONSE TIME'
-	self.ddm_fmt = ('%s', '%i', '%f8')
-	self.new_fig()
-	self.fit_ddm_tags((self.stimulus, self.response, self.rt), plot=True)
-	plt.legend(loc=0)
-	self.save_plot("DDM")
-
-    def fit_ddm_across_conds(self, plot=True, AS=True, depends=None):
-        """Fit the DDM to the saccade data. All conditions are lumped
-        into one and only depend on depends argument (list)."""
-        ddm = []
-
-	self.ddm_params['format'] = 'stimulus RESPONSE TIME'
-        if depends is None:
-            self.ddm_params['depends'] = self.depends
-        else:
-            self.ddm_params['depends'] = depends
-
-        self.ddm_fmt = ('%s', '%i', '%f8')
-
-        if not AS:
-            idx = [self.stimulus_all == '"Prosaccade"']
-        else:
-            idx = [self.stimulus_all == '"Antisaccade"']
-
-        response = self.response_all[idx]
-        rt = self.rt_all[idx]
-        condition = self.tag_all[idx]
-        uniq_conditions = np.unique(condition)
-        self.new_fig()
-        # Fit the model
-        ddm = self.fit_ddm_data((condition, response, rt), plot=False, tag='Across conditions', linestyle='-')
-        for depend in depends:
-            y = []
-            for i in self.x:
-                tag = 'DDM_' + self.condition + '_' + str(i)
-                param_name = "".join((depend, '_', tag))
-                param = ddm.fitted_params[param_name]
-                if param == -np.inf:
-                    param = 0
-                y.append(param)
-            
-            plt.plot(self.x, y, label=depend)
-            plt.title('DDM parameters varying across different levels of ' + self.condition)
-
-        plt.legend()
-        
-        return ddm
-        
-    def fit_ddm_as_separate(self, tag=None, plot=True, PS=True, AS=True):
-	"""Fit the DDM to the saccade data. Pro- and antisaccade trials
-	are fit separately.
-
-        Arguments:
-        tag: Fit to a specific tag, if None, fit to all tags.
-        plot: Use pyfastdm's plotting function
-        PS: Fit model to prosaccade trials
-        AS: Fit model to antisaccade trials
-
-        Returns:
-        (fitted_prosaccade_models, fitted_antisaccade_models)
-	"""
-        ddm_ps = []
-        ddm_as = []
-        
-	self.ddm_params['format'] = 'RESPONSE TIME'
-	self.ddm_fmt = ('%i', '%f8')
-
-        if plot:
-            self.new_fig()
-
-        # If tag is None, loop over all conditions.
-        if tag is None:
-            tags = self.tags
-        else:
-            tags = [tag]
-            
-	for i,tag in enumerate(tags):
-            if PS:
-                # Select Prosaccade responses and RTs, fit model
-                response_ps = self.response[tag][self.stimulus[tag] == '"Prosaccade"']
-                rt_ps = self.rt[tag][self.stimulus[tag] == '"Prosaccade"']
-                # Fit the model
-                ddm_ps.append(self.fit_ddm_data((response_ps, rt_ps), plot=plot, tag=tag+'_PS', color=self.colors[i], linestyle='-'))
-
-	    if AS:
-                # Select Antisaccade responses and RTs, fit model
-                response_as = self.response[tag][self.stimulus[tag] == '"Antisaccade"']
-                rt_as = self.rt[tag][self.stimulus[tag] == '"Antisaccade"']
-                # Fit the model
-                ddm_as.append(self.fit_ddm_data((response_as, rt_as), plot=plot, tag=tag+'_AS', color=self.colors[i], linestyle='--'))
-
-        if plot:
-            plt.legend()
-
-        return (ddm_ps, ddm_as)
-
-
     def analyze(self):
         #ps_ddms, as_ddms = self.fit_ddm_as_separate(plot=True, PS=False, AS=True)
 
@@ -543,10 +440,10 @@ class SaccadeDDMDA(SaccadeDDMBase):
             flag['thalam_thresh'] = 0.7
 
 # @pools.register_group(['saccade', 'DDM', 'STN', 'nocycle'])
-# class SaccadeDDMThalam(SaccadeDDMBase):
-#     def __init__(self, start=0, stop=.5, samples=5, **kwargs):
-#         super(SaccadeDDMThalam, self).__init__(**kwargs)
-#         self.set_flags_condition('stn_bias', start, stop, samples)
+class SaccadeDDMSTN(SaccadeDDMBase):
+     def __init__(self, start=0, stop=.5, samples=5, **kwargs):
+         super(SaccadeDDMSTN, self).__init__(**kwargs)
+         self.set_flags_condition('stn_bias', start, stop, samples)
 
 
 @pools.register_group(['saccade', 'DDM', 'compare', 'nocycle'])
