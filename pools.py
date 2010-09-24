@@ -162,7 +162,10 @@ class Pools(object):
                     try:
                         task = self.queue.get(timeout=10)
                     except Empty:
-                        break
+                        # Send workers kill signal
+                        print "Controller: Sending kill signal"
+                        MPI.COMM_WORLD.send([], dest=status.source, tag=2)
+                        
                     # Send job to worker
                     print "Controller: Sending task"
                     MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
@@ -170,6 +173,7 @@ class Pools(object):
                 elif status.tag == 2: # Exit
                     process_list.remove(status.source)
                     print 'Process %i exited' % status.source
+                    print 'Processes left: ' + str(process_list)
                 else:
                     print 'Unkown tag %i with msg %s' % (status.tag, str(data))
 
@@ -179,6 +183,7 @@ class Pools(object):
 
         # All jobs finished, analyze.
         if analyze:
+            print "Controller: Analyzing jobs"
             iter_models = registered_models.instantiated_models_dict.iterkeys()
             while(True):
                 status = MPI.Status()

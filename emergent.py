@@ -70,7 +70,8 @@ class Base(object):
 		     'log_dir': self.log_dir,
 		     'batches': 1,
                      'debug': debug,
-                     'SZ_mode': 'false'}
+                     'SZ_mode': 'false',
+                     'rnd_seed': 'NEW_SEED'}
 
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
@@ -520,7 +521,7 @@ def main():
         import antisaccade
         import stopsignal
 
-        pools.registered_models.prepare_queue()
+        pools.registered_models.prepare_queue(batches=4)
    
     if master:
         if prefix is None:
