@@ -22,7 +22,7 @@ except ImportError:
 try:
     from IPython.Debugger import Tracer; debug_here = Tracer()
 except:
-    pass
+    def debug_here(): pass
 
 import pools
 

@@ -706,7 +706,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	plt.ylabel('Average SC activity')
 	plt.title('SC activity during antisaccades and antisaccade errors')
 	plt.legend(loc=2)
-        plt.axhline(x=self.thalam_thresh, color='k')
+        plt.axhline(y=self.thalam_thresh, color='k')
 
     def analyse_STN_act(self):
 	wind = (0,200)

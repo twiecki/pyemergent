@@ -11,7 +11,7 @@ except:
 try:
     from IPython.Debugger import Tracer; debug_here = Tracer()
 except:
-    pass
+    def debug_here(): pass
 
 import pools
 import emergent
@@ -536,7 +536,6 @@ class IFGLesion(StopSignalBase):
 
     def analyze(self):
 	self.new_fig()
-        debug_here()
 	for i,lesion in enumerate(self.IFG_lesions):
             tag = 'IFG_' + str(lesion)
 	    data_mean, data_sem = emergent.group_batch(self.data[tag], ['SSD', 'SS_presented'])

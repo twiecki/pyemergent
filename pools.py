@@ -24,7 +24,7 @@ except:
 try:
     from IPython.Debugger import Tracer; debug_here = Tracer()
 except:
-    pass
+    def debug_here(): pass
 
 try:
     import multiprocessing
@@ -151,6 +151,8 @@ class Pools(object):
         from mpi4py import MPI
         process_list = range(1, MPI.COMM_WORLD.Get_size())
 
+        if run and analyze:
+            raise ValueError('Either run or analyze can be true. Call this function twice.')
         print "Controller: started"
         if run:
             # Feed all queued jobs to the childs
@@ -202,6 +204,7 @@ class Pools(object):
                 elif status.tag == 2: # Exit
                     process_list.remove(status.source)
                     print 'Process %i exited' % status.source
+                    print 'Processes left: ' + str(process_list)
                 else:
                     print 'Unkown tag %i with msg %s' % (status.tag, str(recv))
 
