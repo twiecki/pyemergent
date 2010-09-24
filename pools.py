@@ -250,10 +250,15 @@ class Pools(object):
             elif status.tag == 11:
                 # Analyze model
                 print "Worker %i on %s: Analyzing model %s" % (rank, proc_name, recv)
-                model = registered_models.instantiated_models_dict[recv]
-                model.load_logs()
-                model.preprocess_data()
-                model.analyze()
+                try:
+                    model = registered_models.instantiated_models_dict[recv]
+                    model.load_logs()
+                    model.preprocess_data()
+                    model.analyze()
+                except Exception, err:
+                    # Only log the error, but keep on processing jobs
+                    sys.stderr.write("ERROR: %s\n"%str(err))
+                    
 
             print("Worker %i on %s: finished one job" % (rank, proc_name))
             MPI.COMM_WORLD.send([], dest=0, tag=10)
