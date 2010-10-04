@@ -280,7 +280,6 @@ class Saccade_pretrial(Saccade):
 	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=SZ, max_epoch=500, **kwargs)
 
 
-
 #######
 # DDM #
 #######
@@ -294,7 +293,7 @@ class SaccadeDDMBase(Saccade):
             del kwargs['fit_ddm']
 
         if not kwargs.has_key('fit_lba'):
-            self.fit_lba = True
+            self.fit_lba = False
         else:
             self.fit_ddm = kwargs['fit_lba']
             del kwargs['fit_lba']

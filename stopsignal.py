@@ -297,7 +297,7 @@ class Salience(StopSignalBase):
 	    
 @pools.register_group(['stopsignal'])
 class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,0.5,0.75,1), **kwargs):
+    def __init__(self, IFG_lesions=(0.,0.25,0.5,.75,1.), **kwargs):
 	super(StopSignal_IFGlesion, self).__init__(**kwargs)
 	self.tags = []
 	self.IFGs = []
@@ -529,7 +529,7 @@ class IFGLesion(StopSignalBase):
 	for IFG_lesion in self.IFG_lesions:
 	    self.flag['IFG_lesion'] = IFG_lesion
 	    tag = 'IFG_' + str(IFG_lesion)
-	    self.names.append('%i IFG lesion'%(int(IFG_lesion*100)))
+	    self.names.append(str(int(IFG_lesion*100)) + '%' + ' IFG lesion')
 	    self.tags.append(tag)
 	    self.flag['tag'] = '_' + tag
 	    self.flags.append(copy(self.flag))

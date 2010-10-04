@@ -9,16 +9,10 @@ except:
 import numpy as np
 import sys
 
-import fastdm
 #import hhm
 from math import ceil
 from copy import copy
 
-try:
-    import hddm
-except ImportError:
-    print "HDDM module could not be found"
-    
 try:
     from IPython.Debugger import Tracer; debug_here = Tracer()
 except:
@@ -61,7 +55,6 @@ class Base(object):
 	self.plot_prefix_pdf = self.prefix + 'plots/pdf/' + self.__class__.__name__ + '_'
 	self.colors = ('r','b','g','y','c')
 
-	self.ddm_params = copy(fastdm.params_exp_default)
 	self.ddms = {}
 	self.ddms_results = {}
 	#self.hhm = hhm.hhm()
@@ -162,7 +155,8 @@ class Base(object):
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
     def fit_hddm(self, depends_on, plot=False, **kwargs):
-        model = hddm.HDDM_multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
+        import hddm
+        model = hddm.Multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
         model.mcmc()
 
         if plot:
@@ -171,7 +165,8 @@ class Base(object):
         return model
 
     def fit_hlba(self, depends_on, plot=False, **kwargs):
-        model = hddm.HDDM_multi_lba(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
+        import hddm
+        model = hddm.Multi(self.hddm_data, model_type='LBA', depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
         model.mcmc()
 
         if plot:
