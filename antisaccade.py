@@ -204,7 +204,7 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
             
 
-    def plot_RT_histogram(self, bins=75, range=(0,200)):
+    def plot_RT_histogram(self, bins=75, range=(0,200), save=True):
 	for i,tag in enumerate(self.tags):
 	    fig = plt.figure()
 
@@ -236,6 +236,9 @@ class Saccade(emergent.Base):
 	    plt.ylabel("Number of trials")
 	    plt.xlabel("Response time (cycles)")
             plt.ylim((0, np.max(y)+20))
+
+            if save:
+                self.save_plot('RT_histogram_%s'%tag)
 
     def plot_block_influence(self, error=False, IFG_act=False, SPE=False):
 	"""Plot trial number of block against error (if IFG_act is false)
@@ -367,14 +370,10 @@ class SaccadeDDMBase(Saccade):
 
         #self.ddm = self.fit_ddm_across_conds(depends=self.depends, plot=plot, AS=True)
         if self.fit_ddm:
-            self.hddm_model_a = self.fit_hddm(depends_on={'a':['dependent']})
-            self.hddm_model_z = self.fit_hddm(depends_on={'z':['dependent']})
-            self.hddm_model_v = self.fit_hddm(depends_on={'v':['dependent']})
-
-            print 'logp a: %f' % self.hddm_model_a.mcmc_model.logp
-            print 'logp v: %f' % self.hddm_model_v.mcmc_model.logp
-            print 'logp z: %f' % self.hddm_model_z.mcmc_model.logp
-
+            self.new_fig()
+            self.fit_and_analyze_ddm()
+            self.save_plot('DDM_fit')
+            
         if self.fit_lba:
             self.lba_model_a = self.fit_hlba(depends_on={'a':['dependent']})
             self.lba_model_z = self.fit_hlba(depends_on={'z':['dependent']})
@@ -388,7 +387,24 @@ class SaccadeDDMBase(Saccade):
         #print self.hddm_model.params_est
         if self.plot:
             self.plot_RT_histogram()
+            self.save_plot('RT_histogram')
             self.plot_var('error')
+
+    def fit_and_analyze_ddm(self):
+        self.hddm_model_a = self.fit_hddm(depends_on={'a':['dependent']})
+        self.hddm_model_z = self.fit_hddm(depends_on={'z':['dependent']})
+        self.hddm_model_v = self.fit_hddm(depends_on={'v':['dependent']})
+        self.hddm_model_t = self.fit_hddm(depends_on={'t':['dependent']})
+
+        print 'logp a: %f' % self.hddm_model_a.mcmc_model.logp
+        print 'logp v: %f' % self.hddm_model_v.mcmc_model.logp
+        print 'logp z: %f' % self.hddm_model_z.mcmc_model.logp
+        print 'logp t: %f' % self.hddm_model_t.mcmc_model.logp
+
+        plt.plot([self.hddm_model_a.mcmc_model.logp, self.hddm_model_v.mcmc_model.logp, self.hddm_model_z.mcmc_model.logp, self.hddm_model_t.mcmc_model.logp])
+        plt.ylabel('logp')
+        plt.xticks(np.arange(4), ['threshold', 'drift', 'bias', 'ter'])
+        plt.title('HDDM model fits for different varying parameters')
 
     def plot_var(self, var): #, param):
         values = []

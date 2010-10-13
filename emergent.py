@@ -64,7 +64,8 @@ class Base(object):
 		     'batches': 1,
                      'debug': debug,
                      'SZ_mode': 'false',
-                     'rnd_seed': 'NEW_SEED'}
+                     'rnd_seed': 'NEW_SEED',
+                     'LC_mode': 'HPLT'}
 
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):

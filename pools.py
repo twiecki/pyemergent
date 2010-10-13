@@ -304,7 +304,7 @@ class RegisteredModels(object):
                 group_models = []
                 # Gather all models from all groups and create intersection
                 for group in groups:
-                    assert pools.groups.has_key(group), "Group with name "+ group+ " not found"
+                    assert pools.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(pools.groups.keys())
                     group_models.append(pools.groups[group])
                 self.registered_models = set.intersection(*group_models)
                     

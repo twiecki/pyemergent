@@ -97,6 +97,7 @@ class StopSignalBase(emergent.Base):
             self.GoRT[tag].append(self.resp_noss_data[tag][-1]['minus_cycles'])
             self.RT[tag].append(self.resp_data[tag][-1]['minus_cycles'])
             self.SSD[tag].append(self.data_settled[tag][-1]['SSD'])
+            debug_here()
             self.SSRT[tag].append(calc_SSRT(self.GoRT[tag][-1], self.SSD[tag][-1]))
 
         # Analyze SSRTs for SS and Go_resp
@@ -174,7 +175,10 @@ class StopSignalBase(emergent.Base):
 	    plt.ylim((60,120))
 	    plt.legend(loc=2)
 
-
+    def plot_SSRTs(self):
+        for t,tag in enumerage(self.tags):
+            plt.bar(t, self.SSRT[tag], label=tag)
+            
     def plot_GoRTs(self):
 	i=1
 	for t,tag in enumerate(self.tags):
@@ -203,6 +207,33 @@ class StopSignalBase(emergent.Base):
 		GoHist.append(np.histogram(GoDist, bins=75, range=(0,200))[0])
 	    ml.figure(t)
 	    chart = ml.barchart(GoHist)
+
+@pools.register_group(['stopsignal', 'NE'])
+class Norepinephrine(StopSignalBase):
+    def __init__(self, **kwargs):
+        super(Norepinephrine, self).__init__(**kwargs)
+
+        self.tags = ['HPLT', 'LPHT']
+	self.flag['staircase_mode'] = True
+	self.flag['SS_prob'] = .25
+        self.flag['LC_mode'] = self.tags[0]
+        self.flag['tag'] = self.tags[0]
+        self.flags.append(copy(self.flag))
+
+        self.flag['LC_mode'] = self.tags[1]
+        self.flag['tag'] = self.tags[1]
+        self.flags.append(copy(self.flag))
+
+    def analyze(self):
+        self.new_fig()
+        self.plot_GoRTs()
+        self.save_plot('NE_GoRTs')
+
+        self.new_fig()
+        self.plot_SSRTs()
+        self.save_plot('NE_SSRTs')
+
+        
 
 #@pools.register_group(['atomoxetine'])
 class Atomoxetine(StopSignalBase):
@@ -262,7 +293,7 @@ class Atomoxetine(StopSignalBase):
 
 	self.save_plot("2D-SSRT")
 
-@pools.register_group(['stopsignal'])
+@pools.register_group(['stopsignal', 'salience'])
 class Salience(StopSignalBase):
     def __init__(self, detection_probs=None, **kwargs):
 	super(Salience, self).__init__(**kwargs)
