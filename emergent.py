@@ -100,7 +100,8 @@ class Base(object):
 	    data_batches = []
 	    for batch in range(self.batches):
 		fname = os.path.join(self.log_dir, self.proj + '_' + tag + '_b' + str(batch) + '.' + log_type + '.dat')
-		print fname
+                #if not self.silent:
+                #    print fname
 		data_ind = load_log(fname)
 		# Change batch number
 		data_ind['batch'] = batch
@@ -157,7 +158,7 @@ class Base(object):
 
     def fit_hddm(self, depends_on, plot=False, **kwargs):
         import hddm
-        model = hddm.Multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
+        model = hddm.Multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, init_EZ=False, **kwargs)
         model.mcmc()
 
         if plot:

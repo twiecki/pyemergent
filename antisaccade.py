@@ -37,13 +37,13 @@ class Saccade(emergent.Base):
 	if pre_trial_cue:
 	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = True
-            self.flag['DLPFC_speed_mean'] = .02
+            self.flag['DLPFC_speed_mean'] = .015
             self.flag['DLPFC_speed_std'] = 0.01 # 0.05
 
 	else:
 	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = False
-            self.flag['DLPFC_speed_mean'] = .01
+            self.flag['DLPFC_speed_mean'] = .015
             self.flag['DLPFC_speed_std'] = .1 # 0.05
 
         if intact:
@@ -265,7 +265,7 @@ class Saccade(emergent.Base):
 	plt.title(col_name)
 
 
-@pools.register_group(['saccade', 'ontrial', 'nocycle'])
+#@pools.register_group(['saccade', 'ontrial', 'nocycle'])
 class Saccade_ontrial(Saccade):
     def __init__(self, **kwargs):
 	super(Saccade_ontrial, self).__init__(pre_trial_cue=False, **kwargs)
@@ -392,14 +392,13 @@ class SaccadeDDMBase(Saccade):
 
     def fit_and_analyze_ddm(self):
         self.hddm_model_a = self.fit_hddm(depends_on={'a':['dependent']})
+        print self.hddm_model_a.summary()
         self.hddm_model_z = self.fit_hddm(depends_on={'z':['dependent']})
+        print self.hddm_model_z.summary()
         self.hddm_model_v = self.fit_hddm(depends_on={'v':['dependent']})
+        print self.hddm_model_v.summary()
         self.hddm_model_t = self.fit_hddm(depends_on={'t':['dependent']})
-
-        print 'logp a: %f' % self.hddm_model_a.mcmc_model.logp
-        print 'logp v: %f' % self.hddm_model_v.mcmc_model.logp
-        print 'logp z: %f' % self.hddm_model_z.mcmc_model.logp
-        print 'logp t: %f' % self.hddm_model_t.mcmc_model.logp
+        print self.hddm_model_t.summary()
 
         plt.plot([self.hddm_model_a.mcmc_model.logp, self.hddm_model_v.mcmc_model.logp, self.hddm_model_z.mcmc_model.logp, self.hddm_model_t.mcmc_model.logp])
         plt.ylabel('logp')
@@ -463,7 +462,7 @@ class SaccadeDDMSTN(SaccadeDDMBase):
 
 #@pools.register_group(['saccade', 'DDM', 'compare', 'nocycle'])
 class SaccadeDDMCompare(SaccadeDDMBase):
-    def __init__(self, DA=0.032, DLPFC_speed_mean=0.1, **kwargs):
+    def __init__(self, DA=0.032, DLPFC_speed_mean=0.015, **kwargs):
         super(SaccadeDDMCompare, self).__init__(**kwargs)
         
         # Run DA model

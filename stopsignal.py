@@ -97,7 +97,6 @@ class StopSignalBase(emergent.Base):
             self.GoRT[tag].append(self.resp_noss_data[tag][-1]['minus_cycles'])
             self.RT[tag].append(self.resp_data[tag][-1]['minus_cycles'])
             self.SSD[tag].append(self.data_settled[tag][-1]['SSD'])
-            debug_here()
             self.SSRT[tag].append(calc_SSRT(self.GoRT[tag][-1], self.SSD[tag][-1]))
 
         # Analyze SSRTs for SS and Go_resp
@@ -176,9 +175,13 @@ class StopSignalBase(emergent.Base):
 	    plt.legend(loc=2)
 
     def plot_SSRTs(self):
-        for t,tag in enumerage(self.tags):
-            plt.bar(t, self.SSRT[tag], label=tag)
-            
+        for t,tag in enumerate(self.tags):
+            plt.bar(t-.5, np.mean(self.SSRT[tag]), yerr=sem(self.SSRT[tag]))
+
+        plt.xticks((0,1), self.tags) #np.linspace(0.5,len(self.tags),len(self.tags)-.5), self.tags)
+
+        plt.title('SSRT across conditions')
+        
     def plot_GoRTs(self):
 	i=1
 	for t,tag in enumerate(self.tags):
@@ -199,6 +202,20 @@ class StopSignalBase(emergent.Base):
 	    plt.xlabel('RT')
 	    i+=3
 
+    def plot_SSD_vs_inhib(self, i, tag):
+        data_mean, data_sem = emergent.group_batch(self.data[tag], ['SSD', 'SS_presented'])
+        idx = data_mean['SS_presented'] == 1
+        plt.errorbar(data_mean['SSD'][idx],
+                     data_mean['inhibited'][idx],
+                     yerr = data_sem['inhibited'][idx],
+                     #color=colors[i],
+                     label=self.names[i], lw=self.lw)
+
+	plt.title('IFG lesion effects on response inhibition')
+	plt.xlabel('SSD')
+	plt.ylabel('P(inhib|signal)')
+	plt.legend(loc=0, fancybox=True)
+
     def plot_3dhisto(self):
 	for t,tag in enumerate(self.tags):
 	    # Plot GoRT histogram
@@ -208,22 +225,29 @@ class StopSignalBase(emergent.Base):
 	    ml.figure(t)
 	    chart = ml.barchart(GoHist)
 
-@pools.register_group(['stopsignal', 'NE'])
+@pools.register_group(['stopsignal', 'NE', 'staircase'])
 class Norepinephrine(StopSignalBase):
     def __init__(self, **kwargs):
         super(Norepinephrine, self).__init__(**kwargs)
 
         self.tags = ['HPLT', 'LPHT']
+        
+	#self.flag['test_SSD_mode'] = True
+        #self.flag['SSD_start'] = 0
+        #self.flag['SSD_stop'] = 70
+
 	self.flag['staircase_mode'] = True
 	self.flag['SS_prob'] = .25
         self.flag['LC_mode'] = self.tags[0]
-        self.flag['tag'] = self.tags[0]
+        self.flag['tag'] = '_'+self.tags[0]
         self.flags.append(copy(self.flag))
 
         self.flag['LC_mode'] = self.tags[1]
-        self.flag['tag'] = self.tags[1]
+        self.flag['tag'] = '_'+self.tags[1]
         self.flags.append(copy(self.flag))
 
+        self.names = self.tags
+        
     def analyze(self):
         self.new_fig()
         self.plot_GoRTs()
@@ -233,7 +257,36 @@ class Norepinephrine(StopSignalBase):
         self.plot_SSRTs()
         self.save_plot('NE_SSRTs')
 
+        self.new_fig()
+        self.plot_staircase()
+
+@pools.register_group(['stopsignal', 'NE', 'nostaircase'])
+class NorepinephrineNoStair(StopSignalBase):
+    def __init__(self, **kwargs):
+        super(NorepinephrineNoStair, self).__init__(**kwargs)
+
+        self.tags = ['HPLT', 'LPHT']
         
+	self.flag['test_SSD_mode'] = True
+        self.flag['SSD_start'] = 0
+        self.flag['SSD_stop'] = 70
+
+        self.flag['LC_mode'] = self.tags[0]
+        self.flag['tag'] = '_'+self.tags[0]
+        self.flags.append(copy(self.flag))
+
+        self.flag['LC_mode'] = self.tags[1]
+        self.flag['tag'] = '_'+self.tags[1]
+        self.flags.append(copy(self.flag))
+
+        self.names = self.tags
+        
+    def analyze(self):
+        self.new_fig()
+        for i,tag in enumerate(self.tags):
+            self.plot_SSD_vs_inhib(i,tag)
+        self.save_plot('NE_SSD_vs_inhib')
+
 
 #@pools.register_group(['atomoxetine'])
 class Atomoxetine(StopSignalBase):
@@ -313,6 +366,8 @@ class Salience(StopSignalBase):
 	    self.tags.append(tag)
 	    self.flag['tag'] = '_' + tag
 	    self.flags.append(copy(self.flag))
+
+        self.names = self.tags
 
     def analyze(self):
 	self.new_fig()
@@ -485,7 +540,6 @@ class MotivationalEffects(StopSignalBase):
 	#self.tags = ['NO_BIAS', 'ACC_BIAS', 'SPEED_BIAS']
 	self.tags = ['SPEED_BIAS', 'ACC_BIAS']
 	self.names = ['Speed', 'Accuracy']
-	
 
 	self.flag['staircase_mode'] = True
 	self.flag['SS_prob'] = .25
@@ -504,8 +558,6 @@ class MotivationalEffects(StopSignalBase):
 	self.new_fig()
 	self.plot_motivation_SSRT()
 	self.save_plot("SSRT")
-				   
-	
 
     def plot_motivation_GoRT(self):
 	for i,tag in enumerate(self.tags):
@@ -569,19 +621,8 @@ class IFGLesion(StopSignalBase):
 	self.new_fig()
 	for i,lesion in enumerate(self.IFG_lesions):
             tag = 'IFG_' + str(lesion)
-	    data_mean, data_sem = emergent.group_batch(self.data[tag], ['SSD', 'SS_presented'])
-            idx = data_mean['SS_presented'] == 1
-	    plt.errorbar(data_mean['SSD'][idx],
-			data_mean['inhibited'][idx],
-			yerr = data_sem['inhibited'][idx],
-			#color=colors[i],
-			label=self.names[i], lw=self.lw)
-
-	plt.title('IFG lesion effects on response inhibition')
-	plt.xlabel('SSD')
-	plt.ylabel('P(inhib|signal)')
-	plt.legend(loc=0, fancybox=True)
-
+            self.plot_SSD_vs_inhib(i, tag)
+            
 	self.save_plot("SSD_VS_SS_inhib")
 
 class Crit_VS_Noncrit_stop(StopSignalBase):
