@@ -32,6 +32,7 @@ class Saccade(emergent.Base):
 	self.tags = []
 	self.flag['task'] = 'SACCADE'
         self.flag['motivational_bias'] = 'NO_BIAS'
+        self.flag['LC_mode'] = 'HPLT'
         self.flag['test_SSD_mode'] = 'false'
 
 	if pre_trial_cue:
@@ -264,6 +265,19 @@ class Saccade(emergent.Base):
 
 	plt.title(col_name)
 
+@pools.register_group(['saccade', 'pretrial', 'nocycle', 'NE'])
+class SaccadeNE(Saccade):
+    def __init__(self, **kwargs):
+        super(SaccadeNE, self).__init__(pre_trial_cue=True, **kwargs)
+
+        self.tags = ['HPLT', 'LPHT']
+        self.flag['tag'] = '_' + self.tags[0]
+        self.flag['LC_mode'] = self.tags[0]
+        self.flags.append(copy(self.flag))
+
+        self.flag['tag'] = '_' + self.tags[1]
+        self.flag['LC_mode'] = self.tags[1]
+        self.flags.append(copy(self.flag))
 
 #@pools.register_group(['saccade', 'ontrial', 'nocycle'])
 class Saccade_ontrial(Saccade):
