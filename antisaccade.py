@@ -38,14 +38,14 @@ class Saccade(emergent.Base):
 	if pre_trial_cue:
 	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = True
-            self.flag['DLPFC_speed_mean'] = .015
-            self.flag['DLPFC_speed_std'] = 0.01 # 0.05
+            #self.flag['DLPFC_speed_mean'] = .1
+            #self.flag['DLPFC_speed_std'] = 0.0 # 0.05
 
 	else:
 	    self.flag['max_epoch'] = max_epoch
 	    self.flag['antisaccade_block_mode'] = False
-            self.flag['DLPFC_speed_mean'] = .015
-            self.flag['DLPFC_speed_std'] = .1 # 0.05
+            #self.flag['DLPFC_speed_mean'] = .1
+            #self.flag['DLPFC_speed_std'] = .0 # 0.05
 
         if intact:
             # Intact run
@@ -67,14 +67,21 @@ class Saccade(emergent.Base):
 
 	if PD:
 	    self.tags.append('Decreased_tonic_DA')
-	    self.flag['tag'] = '_' + self.tags[3]
+	    self.flag['tag'] = '_' + self.tags[-1]
 	    self.flag['SZ_mode'] = 'false'
-	    self.flag['tonic_DA_intact'] = 0.01
+	    self.flag['tonic_DA_intact'] = 0.027
 	    self.flag['D1_antag'] = 0
 	    self.flag['D2_antag'] = 0
 	    self.flag['salience'] = 1
 	    self.flags.append(copy(self.flag))
 
+        if NE:
+            self.tags = ['Tonic NE']
+            self.flag['tag'] = '_' + self.tags[0]
+            self.flag['LC_mode'] = 'LPHT'
+            self.flags.append(copy(self.flag))
+
+        
 	return
 	# SZ run + D1 antag
 	self.flag['tag'] = '_' + self.tags[2]
@@ -205,17 +212,34 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
             
 
-    def plot_RT_histogram(self, bins=75, range=(0,200), save=True):
+    def plot_RT_histogram(self, bins=75, range=(0,200), save=True, grid=True, cutoff=None, saccade=None):
+        if saccade is None:
+            saccade = '"Antisaccade"'
+        elif saccade == 'anti':
+            saccade = '"Antisaccade"'
+        elif saccade == 'pro':
+            saccade = '"Prosaccade"'
+        num_tags = len(self.tags)
+        cells = int(np.ceil(np.sqrt(num_tags)))
 	for i,tag in enumerate(self.tags):
-	    fig = plt.figure()
+            if grid and i==0:
+                fig = plt.figure()
+            if not grid:
+                fig = plt.figure()
 
 	    #ax = fig.add_subplot(111, projection='frameaxes')
-	    ax = fig.add_subplot(111)
+            if grid:
+                ax = fig.add_subplot(cells, cells, i+1)
+            else:
+                ax = fig.add_subplot(111)
 	    plt.hold(True)
 
 	    # Correct
 	    data=self.data[tag]
-	    idx = (data['trial_name'] == '"Antisaccade"') & (data['error'] == 0.0) & (data['inhibited'] == 0)
+            if cutoff is not None:
+                idx = (data['trial_name'] == saccade) & (data['error'] == 0.0) & (data['inhibited'] == 0) & (data['minus_cycles'] > cutoff)
+            else:
+                idx = (data['trial_name'] == saccade) & (data['error'] == 0.0) & (data['inhibited'] == 0)
 	    histo = np.histogram(data['minus_cycles'][idx],
 				 bins=bins, range=range)
 	    x = histo[1][:-1]
@@ -224,19 +248,27 @@ class Saccade(emergent.Base):
 	    ax.fill_between(x, 0, y, color=self.colors[0])
 
 	    # Errors
-	    idx = (data['trial_name'] == '"Antisaccade"') & (data['error'] == 1.0) & (data['inhibited'] == 0)
+            if cutoff is not None:
+                idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0) & (data['minus_cycles'] > cutoff)
+            else:
+                idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0)
+                
 	    histo = np.histogram(data['minus_cycles'][idx],
 				 bins=bins, range=range)
 	    y = histo[0]
 	    ax.plot(x, y, label="Error", alpha=0.5, color=self.colors[1])
 	    ax.fill_between(x, 0, y, color=self.colors[1], alpha=.5)
-	    
-	    plt.legend(loc=0, fancybox=True)
 
-	    plt.title("Antisaccade errors and correct responses " + tag)
-	    plt.ylabel("Number of trials")
-	    plt.xlabel("Response time (cycles)")
-            plt.ylim((0, np.max(y)+20))
+            if not grid:
+                plt.legend(loc=0, fancybox=True)
+
+            if not grid:
+                plt.title("%s errors and correct responses %s" %(saccade[2:-2], tag))
+                plt.ylabel("Number of trials")
+                plt.xlabel("Response time (cycles)")
+                #plt.ylim((0, np.max(y)+20))
+            else:
+                plt.title(tag)
 
             if save:
                 self.save_plot('RT_histogram_%s'%tag)
@@ -294,7 +326,7 @@ class Saccade_ontrial(Saccade):
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=SZ, max_epoch=500, **kwargs)
+	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, max_epoch=500, **kwargs)
 
 
 #######
@@ -325,7 +357,7 @@ class SaccadeDDMBase(Saccade):
         self.x = np.linspace(start, stop, samples)
         self.condition = condition
         for i in self.x:
-            tag = 'DDM_' + condition + '_' + str(i)
+            tag = 'condition_%.2f' % i
             self.tags.append(tag)
             self.flag['tag'] = '_' + tag
             self.flag[condition] = i
@@ -342,11 +374,11 @@ class SaccadeDDMBase(Saccade):
         self.subj_idx = {}
         self.tags_array = {}
         # fastdm expects reaction times in the domain of 5 secs (max)
-        max_rt = 300
-        norm = max_rt/5.
+        max_rt = 200
+        norm = max_rt/2.
 
 	for tag in self.tags:
-	    data = self.data[tag][(self.data[tag]['inhibited'] == 0) & (self.data[tag]['trial_name'] == '"Antisaccade"')]
+	    data = self.data[tag][(self.data[tag]['inhibited'] == 0) & (self.data[tag]['trial_name'] == '"Antisaccade"') & (self.data[tag]['minus_cycles']>50)]
             if len(data) == 0:
                 print "No responses made on condition: " + tag
 	    self.stimulus[tag] = np.copy(data['trial_name'])
@@ -356,11 +388,6 @@ class SaccadeDDMBase(Saccade):
             self.tags_array[tag][:] = tag
             
 	    self.rt[tag] = np.copy(data['minus_cycles'])/norm
-	    #idx_as = self.stimulus[tag] == '"Antisaccade"'
-	    # Invert errors of antisaccade trials, that way,
-	    # successful antisaccades are 1, while errors
-	    # (i.e. prosaccades) are 0
-	    #self.response[tag][idx_as] = 1 - self.response[tag][idx_as]
 
         # Create array with data across tags (tag becomes stimulus)
         self.stimulus_all = np.hstack([self.stimulus[tag] for tag in self.tags])
@@ -374,15 +401,21 @@ class SaccadeDDMBase(Saccade):
                           ('dependent', 'S32')])
 
         self.hddm_data = np.rec.fromarrays([self.stimulus_all, self.response_all, self.rt_all,
-                                   self.subj_idx_all, self.tags_array_all], dtype=dtype)
+                                            self.subj_idx_all, self.tags_array_all], dtype=dtype)
         
         # Create tag array with tag names for every line in *_all variables
         self.tag_all = np.hstack([tag for tag in self.tags for stimulus in self.stimulus[tag]])
 
     def analyze(self):
-        #ps_ddms, as_ddms = self.fit_ddm_as_separate(plot=True, PS=False, AS=True)
+        if self.plot:
+            self.plot_RT_histogram()#(cutoff=50)
+            self.save_plot('RT_histogram')
+            self.plot_RT_histogram(saccade='pro')#(cutoff=50)
+            self.save_plot('RT_histogram_pro')
 
-        #self.ddm = self.fit_ddm_across_conds(depends=self.depends, plot=plot, AS=True)
+            self.plot_var('error')
+            self.plot_var('error', inhibited_as_error=True)
+
         if self.fit_ddm:
             self.new_fig()
             self.fit_and_analyze_ddm()
@@ -397,34 +430,65 @@ class SaccadeDDMBase(Saccade):
             print 'logp v: %f' % self.lba_model_v.mcmc_model.logp
             print 'logp z: %f' % self.lba_model_z.mcmc_model.logp
            
-        
-        #print self.hddm_model.params_est
-        if self.plot:
-            self.plot_RT_histogram()
-            self.save_plot('RT_histogram')
-            self.plot_var('error')
 
     def fit_and_analyze_ddm(self):
-        self.hddm_model_a = self.fit_hddm(depends_on={'a':['dependent']})
-        print self.hddm_model_a.summary()
-        self.hddm_model_z = self.fit_hddm(depends_on={'z':['dependent']})
-        print self.hddm_model_z.summary()
-        self.hddm_model_v = self.fit_hddm(depends_on={'v':['dependent']})
-        print self.hddm_model_v.summary()
-        self.hddm_model_t = self.fit_hddm(depends_on={'t':['dependent']})
-        print self.hddm_model_t.summary()
+        import pymc as pm
 
-        plt.plot([self.hddm_model_a.mcmc_model.logp, self.hddm_model_v.mcmc_model.logp, self.hddm_model_z.mcmc_model.logp, self.hddm_model_t.mcmc_model.logp])
+        self.hddm_models = {}
+        test_params = ['a', 'z', 'v', 't']
+
+        for test_param in test_params:
+            try:
+                self.hddm_models[test_param] = self.fit_hddm(depends_on={test_param:['dependent']})
+                print self.hddm_models[test_param].summary()
+            except pm.ZeroProbability:
+                print "Fitting of %s model failed" % test_param
+
+        try:
+            self.hddm_models['all'] = self.fit_hddm()
+            print self.hddm_models['all'].summary()
+        except pm.ZeroProbability:
+            print "Fitting of simple model failed."
+
+        plt.subplot(211)
+        plt.plot([self.hddm_models['a'].mcmc_model.logp, self.hddm_models['v'].mcmc_model.logp, self.hddm_models['z'].mcmc_model.logp, self.hddm_models['t'].mcmc_model.logp])
         plt.ylabel('logp')
-        plt.xticks(np.arange(4), ['threshold', 'drift', 'bias', 'ter'])
+        plt.xticks(np.arange(5), ['threshold', 'drift', 'bias', 'ter'])
+        if self.hddm_models.has_key('all'):
+            plt.axhline(self.hddm_models['all'].mcmc_model.logp)
         plt.title('HDDM model fits for different varying parameters')
 
-    def plot_var(self, var): #, param):
+        plt.subplot(212)
+        plt.plot([self.hddm_models['a'].mcmc_model.dic, self.hddm_models['v'].mcmc_model.dic, self.hddm_models['z'].mcmc_model.dic, self.hddm_models['t'].mcmc_model.dic])
+        plt.ylabel('dic')
+        plt.xticks(np.arange(5), ['threshold', 'drift', 'bias', 'ter'])
+        if self.hddm_models.has_key('all'):
+            plt.axhline(self.hddm_models['all'].mcmc_model.dic)
+        plt.title('HDDM model fits for different varying parameters')
+
+        plt.figure()
+        # Plot parameters
+        #debug_here()
+        for test_param in test_params:
+            y = []
+            for x in self.x:
+                tag = "%s_('%s_%.2f',)" %(test_param, self.condition, x)
+                y.append(self.hddm_models[test_param].params_est[tag])
+            plt.plot(self.x, y, label=test_param)
+
+        plt.legend()
+            
+    def plot_var(self, var, inhibited_as_error=False): #, param):
         values = []
         #params = []
         for tag in self.tags:
-            data_mean, data_sem = emergent.group(self.data[tag], ['trial_name', 'inhibited'])
-            idx = (data_mean['trial_name'] == '"Antisaccade"') & (data_mean['inhibited'] == 0)
+            if inhibited_as_error:
+                data_mean, data_sem = emergent.group(self.data[tag], ['trial_name'])
+                idx = (data_mean['trial_name'] == '"Antisaccade"')
+            else:
+                data_mean, data_sem = emergent.group(self.data[tag], ['trial_name', 'inhibited'])
+                idx = (data_mean['trial_name'] == '"Antisaccade"') & (data_mean['inhibited'] == 0)
+                
             if np.all(idx == False):
                 values.append(1.)
             else:
@@ -433,9 +497,6 @@ class SaccadeDDMBase(Saccade):
 
         self.new_fig()
         plt.plot(self.x, values, 'o')
-        
-        #self.new_fig()
-        #plt.plot(self.x, p
         
 @pools.register_group(['saccade', 'DDM', 'DLPFC', 'nocycle', 'mean'])
 class SaccadeDDMDLPFC_mean(SaccadeDDMBase):
@@ -454,7 +515,7 @@ class SaccadeDDMDLPFC_std(SaccadeDDMBase):
 
 @pools.register_group(['saccade', 'DDM', 'thalam', 'nocycle'])
 class SaccadeDDMThalam(SaccadeDDMBase):
-    def __init__(self, start=0.3, stop=.85, samples=5, **kwargs):
+    def __init__(self, start=0.65, stop=.8, samples=5, **kwargs):
         super(SaccadeDDMThalam, self).__init__(**kwargs)
         self.set_flags_condition('thalam_thresh', start, stop, samples)
 

@@ -156,10 +156,13 @@ class Base(object):
 	savefig(self.plot_prefix_eps + name + ".eps")
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_hddm(self, depends_on, plot=False, **kwargs):
+    def fit_hddm(self, depends_on=None, plot=False, **kwargs):
         import hddm
+        # Remove outliers
+        self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
+
         model = hddm.Multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, init_EZ=False, **kwargs)
-        model.mcmc()
+        model.mcmc(samples=4000, burn=2000)
 
         if plot:
             raise NotImplementedError, "TODO"
