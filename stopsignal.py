@@ -383,7 +383,7 @@ class Salience(StopSignalBase):
 	    
 @pools.register_group(['stopsignal'])
 class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,0.25,0.5,.75,1.), **kwargs):
+    def __init__(self, IFG_lesions=(0.,0.1,0.2,.3,.4), **kwargs):
 	super(StopSignal_IFGlesion, self).__init__(**kwargs)
 	self.tags = []
 	self.IFGs = []
@@ -599,7 +599,7 @@ class MotivationalEffects(StopSignalBase):
 
 @pools.register_group(['stopsignal', 'ifg_lesion'])
 class IFGLesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0,0.25,0.5,0.75,1.), **kwargs):
+    def __init__(self, IFG_lesions=(0,0.1,0.2,0.3), **kwargs):
 	super(IFGLesion, self).__init__(**kwargs)
 	self.flag['test_SSD_mode'] = True
         self.flag['SSD_start'] = 0

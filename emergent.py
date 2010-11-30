@@ -43,6 +43,7 @@ class Base(object):
         self.plot = plot
 	self.flags = []
         self.lw = 2.
+        self.debug = debug
 	#self.log_dir_emergent = os.path.join('logs', self.__class__.__name__)
         if log_dir is None:
             self.log_dir = os.path.join(self.prefix, 'logs', self.__class__.__name__)
@@ -65,7 +66,7 @@ class Base(object):
                      'debug': debug,
                      'SZ_mode': 'false',
                      'rnd_seed': 'NEW_SEED',
-                     'LC_mode': 'HPLT'}
+                     'LC_mode': 'phasic'}
 
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
@@ -100,8 +101,8 @@ class Base(object):
 	    data_batches = []
 	    for batch in range(self.batches):
 		fname = os.path.join(self.log_dir, self.proj + '_' + tag + '_b' + str(batch) + '.' + log_type + '.dat')
-                #if not self.silent:
-                #    print fname
+                if self.debug:
+                    print fname
 		data_ind = load_log(fname)
 		# Change batch number
 		data_ind['batch'] = batch
