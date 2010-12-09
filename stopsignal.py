@@ -230,7 +230,7 @@ class Norepinephrine(StopSignalBase):
     def __init__(self, **kwargs):
         super(Norepinephrine, self).__init__(**kwargs)
 
-        self.tags = ['HPLT', 'LPHT']
+        self.tags = ['phasic', 'tonic']
         
 	#self.flag['test_SSD_mode'] = True
         #self.flag['SSD_start'] = 0
@@ -265,7 +265,7 @@ class NorepinephrineNoStair(StopSignalBase):
     def __init__(self, **kwargs):
         super(NorepinephrineNoStair, self).__init__(**kwargs)
 
-        self.tags = ['HPLT', 'LPHT']
+        self.tags = ['phasic', 'tonic']
         
 	self.flag['test_SSD_mode'] = True
         self.flag['SSD_start'] = 0
@@ -383,7 +383,7 @@ class Salience(StopSignalBase):
 	    
 @pools.register_group(['stopsignal'])
 class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,0.1,0.2,.3,.4), **kwargs):
+    def __init__(self, IFG_lesions=(0.,0.05,0.1,.15,.2), **kwargs):
 	super(StopSignal_IFGlesion, self).__init__(**kwargs)
 	self.tags = []
 	self.IFGs = []

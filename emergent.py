@@ -70,7 +70,10 @@ class Base(object):
 
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
-	    os.mkdir(self.log_dir)
+            try:
+                os.mkdir(self.log_dir)
+            except OSError:
+                pass
 
     def _split_batches(self):
         """Called by queue_jobs.
@@ -157,7 +160,7 @@ class Base(object):
 	savefig(self.plot_prefix_eps + name + ".eps")
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_hddm(self, depends_on=None, plot=False, **kwargs):
+    def fit_hddm(self, depends_on=None, plot=True, **kwargs):
         import hddm
         # Remove outliers
         self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
@@ -166,7 +169,9 @@ class Base(object):
         model.mcmc(samples=4000, burn=2000)
 
         if plot:
-            raise NotImplementedError, "TODO"
+            self.new_fig()
+            model.plot()
+            self.save_fig('DDM_fits')
 
         return model
 
@@ -262,11 +267,13 @@ class BaseCycle(Base):
 
 def load_log(fname):
     dtype = convert_header_np(fname)
-    if np.__version__ == '1.5.0':
-        data = np.genfromtxt(fname, dtype=dtype, skip_header=True)
-    else:
-        data = np.genfromtxt(fname, dtype=dtype, skiprows=1)
-
+    try:
+        if np.__version__ == '1.5.0':
+            data = np.genfromtxt(fname, dtype=dtype, skip_header=True)
+        else:
+            data = np.genfromtxt(fname, dtype=dtype, skiprows=1)
+    except TypeError:
+        raise TypeError("Error reading log file (most common not all columns generated. Check if multiple emergent runs have been writing to the same output file.\n")
     return data
 
 def convert_header_np(fname):

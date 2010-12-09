@@ -33,6 +33,39 @@ except:
 
 from Queue import Empty, Full
 
+import time
+
+class Retry(object):
+    default_exceptions = (Exception)
+    def __init__(self, tries, exceptions=None, delay=0):
+        """
+        Decorator for retrying function if exception occurs
+        
+        tries -- num tries
+        exceptions -- exceptions to catch
+        delay -- wait between retries
+        """
+        self.tries = tries
+        if exceptions is None:
+            exceptions = Retry.default_exceptions
+        self.exceptions =  exceptions
+        self.delay = delay
+
+    def __call__(self, f):
+        def fn(*args, **kwargs):
+            exception = None
+            for _ in range(self.tries):
+                try:
+                    return f(*args, **kwargs)
+                except self.exceptions, e:
+                    print "Retry, exception: "+str(e)
+                    time.sleep(self.delay)
+                    exception = e
+            #if no success after tries, raise last exception
+            raise exception
+        return fn
+
+
 class Pools(object):
     """This class contains the following containers and operates on them:
     queue: jobs to work on
@@ -134,7 +167,11 @@ class Pools(object):
 
         try:
             while(True):
-                flag = self.queue.get(timeout=10)
+                try:
+                    flag = self.queue.get(timeout=10)
+                except IOError:
+                    flag = self.queue.get(timeout=10)
+                    
                 call_emergent(dict_to_list(flag), prefix=command, silent=silent)
                 # Done
                 self.queue.task_done()
@@ -257,7 +294,7 @@ class Pools(object):
                     model.analyze()
                 except Exception, err:
                     # Only log the error, but keep on processing jobs
-                    sys.stderr.write("ERROR: %s\n"%str(err))
+                    sys.stderr.write("Worker %i on %s: ERROR: %s" % (rank, proc_name, str(err)))
                     
 
             print("Worker %i on %s: finished one job" % (rank, proc_name))
@@ -408,6 +445,7 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
 
     return model
 
+@Retry(3)
 def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False):
     """Call emergent with the provided flags(list).
     A prefix can be provided which will be inserted before emergent."""
