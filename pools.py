@@ -26,12 +26,6 @@ try:
 except:
     def debug_here(): pass
 
-try:
-    import multiprocessing
-except:
-    pass
-
-from Queue import Empty, Full
 
 import time
 
@@ -66,148 +60,132 @@ class Retry(object):
         return fn
 
 
-class Pools(object):
-    """This class contains the following containers and operates on them:
-    queue: jobs to work on
-    queue_output: finished jobs
-    pbar: the progress bar
-    processes: the workers"""
-    
+class Pool(object):
     def __init__(self):
-        self.queue = multiprocessing.JoinableQueue()
-        self.queue_output = multiprocessing.Queue()
-        if pbar:
-            self.pbar = progressbar.ProgressBar()
-        self.processes = []
-        self.groups = {}
-        self.registered_models = set()
+        self.instantiated_models = []
+        self.instantiated_models_dict = {}
+        self.selected_models = set()
         self.emergent_exe = None
 
-
-    def queue_jobs(self, items):
+    def queue_jobs(self):
         """Put jobs in the queue to be processed"""
-	assert len(items) != 0, "Job queue is empty!"
-        
-        for item in items:
-            self.queue_job(item)
+        assert len(self.instantiated_models) != 0, "Insantiate models first by calling _instantiate()"
+        for model in self.instantiated_models:
+            split_jobs = model.split_batches()
+            # Put jobs in queue
+            for job in split_jobs:
+                self.queue_job(job)
+
+    def _instantiate(self, **kwargs):
+        """Instantiate selected models (select via select())."""
+        assert len(self.selected_models) != 0, "No models selected."
+        for model in self.selected_models:
+            self.instantiated_models.append(model(**kwargs))
+            self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
+
+    def prepare(self, queue=True, **kwargs):
+        self._instantiate(**kwargs)
+        if queue:
+            self.queue_jobs()
+
+    def analyze(self):
+        for model in self.instantiated_models:
+            model.load_logs()
+            model.preprocess_data()
+            model.analyze()
+            
+    def select(self, groups=None, exclude=None, all=False):
+        """Check if models are registered and instantiated. If not,
+        register and instantiate them."""
+        if all:
+            groups = registered_models.groups.keys()
+
+        if exclude is None:
+            exclude = set()
+        else:
+            exclude = set(exclude)
+            
+        # Check that all groups exist
+        for group in groups:
+            assert registered_models.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(registered_groups.groups.keys())
+
+        selected_groups = set.intersection(set(registered_models.groups.keys()), set(groups))
+
+        # Exclude models
+        #selected_groups = set.discard(self.selected_models, exclude)
+
+        # Add models from selected groups
+        for group in selected_groups:
+            for model in registered_models.groups[group]:
+                self.selected_models.add(model)
+
+
+class PoolMPI(Pool):
+    def __init__(self):
+        self.queue = []
+        self.processes = []
+        super(PoolMPI, self).__init__()
             
     def queue_job(self, item):
         """Put one job in the queue to be processed"""
-        self.queue.put(item)
-	# Update the progress bar
-        if pbar:
-            self.pbar.maxval = self.queue.qsize()
+        self.queue.append(item)
 
-    def join_workers(self):
-        self.queue.join()
-        # After successful completion, terminate all workers to tidy up
-        self.terminate_workers()
-
-    def register(self, model):
-        """Register model so that it can be run automatically by
-        calling the pools.run() function."""
-        self.registered_models.add(model)
-        
-        return model
-    
-    def register_group(self, groups):
-        def reg(model):
-            self.register(model)
-            
-            for group in groups:
-                if not self.groups.has_key(group):
-                    self.groups[group] = set()
-                self.groups[group].add(model)
-            return model
-        return reg
-    
-    def start_and_join_workers(self, ssh=True, hosts=None, silent=True):
-        # Convenience function
-	if ssh:
-	    self.start_workers_ssh(hosts=hosts, silent=silent)
-        self.join_workers()
-
-    def terminate_workers(self):
-        if len(self.processes) != 0:
-            for process in self.processes:
-                process.terminate()
-            self.processes = []
-
-        # Empty the queue
-        try:
-            for item in self.queue.get_nowait():
-                pass
-        except Empty:
-            pass
-        #self.pbar.finish()
-
-    def start_workers_ssh(self, hosts=None, silent=True):
-        if hosts is None:
-	    hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':4, 'darpp32': 4}
-            #hosts = {'cycle':2, 'bike':2, 'ski':2, 'ride':2}
-            #hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3}
-            #hosts = {'drd2':4}
-
-        if pbar:
-            self.pbar.start()
-        for host, num_threads in hosts.iteritems():
-            # Create worker threads for every host
-            for i in range(num_threads):
-                if not silent:
-                    print "Launching process for " + host
-                proc = multiprocessing.Process(target=self.worker, args=(host,silent))
-                proc.start()
-                self.processes.append(proc)
-
-    def worker(self, host, silent):
-        if host != 'local':
-            command = ['ssh', host]
-        else:
-            command = None
-
-        try:
-            while(True):
-                try:
-                    flag = self.queue.get(timeout=10)
-                except IOError:
-                    flag = self.queue.get(timeout=10)
-                    
-                call_emergent(dict_to_list(flag), prefix=command, silent=silent)
-                # Done
-                self.queue.task_done()
-                self.queue_output.put(flag)
-                if pbar:
-                    self.pbar.update(self.queue_output.qsize())
-        except Empty:
-            if not silent:
-                print "Empty"
-            return
-
-    # MPI function for usage on cluster
-    def mpi_controller(self, run=True, analyze=True):
+    def start_jobs(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
+        rank = MPI.COMM_WORLD.Get_rank()
+        if rank == 0:
+            self.mpi_controller(run=run, analyze=analyze, **kwargs)
+        else:
+            self.mpi_worker()
+        
+    # MPI function for usage on cluster
+    def mpi_controller(self, run=True, analyze=True, **kwargs):
+        from mpi4py import MPI
+
+        # Put all jobs in the queue
+        self.select(all=True)
+        self.prepare(**kwargs)
+        
         process_list = range(1, MPI.COMM_WORLD.Get_size())
+        rank = MPI.COMM_WORLD.Get_rank()
+        proc_name = MPI.Get_processor_name()
+        status = MPI.Status()
+
+        print "Controller %i on %s: ready!" % (rank, proc_name)
 
         if run and analyze:
             raise ValueError('Either run or analyze can be true. Call this function twice.')
-        print "Controller: started"
+
         if run:
+            workers_done = []
+            queue = iter(self.queue)
             # Feed all queued jobs to the childs
             while(True):
+                # Create iterator
                 status = MPI.Status()
                 recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
                 print "Controller: received tag %i" % status.tag
                 if status.tag == 10:
                     try:
-                        task = self.queue.get(timeout=10)
-                    except Empty:
-                        # Send workers kill signal
-                        print "Controller: Sending kill signal"
-                        MPI.COMM_WORLD.send([], dest=status.source, tag=2)
+                        task = queue.next()
+                        # Send job to worker
+                        print "Controller: Sending task"
+                        MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
+
+                    except StopIteration:
+                        # Task queue is empty
+                        print "Controller: Task queue is empty"
+                        if analyze:
+                            workers_done.append(status.source)
+                            print workers_done
+                            if len(workers_done) == len(process_list):
+                                break
+                            else:
+                                continue
+                        else:
+                            print "Controller: Sending kill signal"
+                            MPI.COMM_WORLD.send([], dest=status.source, tag=2)
                         
-                    # Send job to worker
-                    print "Controller: Sending task"
-                    MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
 
                 elif status.tag == 2: # Exit
                     process_list.remove(status.source)
@@ -282,7 +260,7 @@ class Pools(object):
             if status.tag == 10:
                 # Run emergent
                 print "Worker %i on %s: Calling emergent: %s" % (rank, proc_name, recv)
-                call_emergent(dict_to_list(recv), mpi=True)
+                call_emergent(dict_to_list(recv), mpi=True, emergent_exe=self.emergent_exe)
 
             elif status.tag == 11:
                 # Analyze model
@@ -302,110 +280,141 @@ class Pools(object):
     
         MPI.COMM_WORLD.send([], dest=0, tag=2)
 
-pools = Pools()
+class PoolSSH(Pool):
+    """This class contains the following containers and operates on them:
+    queue: jobs to work on
+    queue_output: finished jobs
+    pbar: the progress bar
+    processes: the workers"""
+    
+    def __init__(self):
+        import multiprocessing
+        from Queue import Empty, Full
+        
+        self.queue = multiprocessing.JoinableQueue()
+        self.queue_output = multiprocessing.Queue()
+        if pbar:
+            self.pbar = progressbar.ProgressBar()
+        self.processes = []
+
+        super(PoolSSH, self).__init__()
+
+    def run(self, hosts=None, run=True, analyze=True, groups=None, all=False, **kwargs):
+        self.select(groups=groups, all=all)
+        if run:
+            self.prepare(**kwargs)
+            self.start_and_join_workers()
+
+        if analyze:
+            self._instantiate(**kwargs)
+            self.analyze()
+            
+            
+    def queue_job(self, item):
+        """Put one job in the queue to be processed"""
+        self.queue.put(item)
+	# Update the progress bar
+        if pbar:
+            self.pbar.maxval = self.queue.qsize()
+
+    def join_workers(self):
+        self.queue.join()
+        # After successful completion, terminate all workers to tidy up
+        self.terminate_workers()
+    
+    def start_and_join_workers(self, hosts=None, silent=True):
+        # Convenience function
+        self.start_workers(hosts=hosts, silent=silent)
+        self.join_workers()
+
+    def terminate_workers(self):
+        if len(self.processes) != 0:
+            for process in self.processes:
+                process.terminate()
+            self.processes = []
+
+        # Empty the queue
+        try:
+            for item in self.queue.get_nowait():
+                pass
+        except Empty:
+            pass
+        #self.pbar.finish()
+
+    def start_workers(self, hosts=None, silent=True):
+        import multiprocessing
+
+        if hosts is None:
+            hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3, 'darpp32': 3, 'theta':7}
+            #hosts = {'cycle':2, 'bike':2, 'ski':2, 'ride':2}
+            #hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3}
+            #hosts = {'drd2':4}
+
+        if pbar:
+            self.pbar.start()
+        for host, num_threads in hosts.iteritems():
+            # Create worker threads for every host
+            for i in range(num_threads):
+                if not silent:
+                    print "Launching process for " + host
+                proc = multiprocessing.Process(target=self.worker, args=(host,silent))
+                proc.start()
+                self.processes.append(proc)
+
+    def worker(self, host, silent):
+        from Queue import Empty, Full
+        if host != 'local':
+            command = ['ssh', host]
+        else:
+            command = None
+
+        try:
+            while(True):
+                try:
+                    flag = self.queue.get(timeout=20)
+                except Empty:
+                    flag = self.queue.get(timeout=10)
+                    
+                call_emergent(dict_to_list(flag), prefix=command, silent=silent, emergent_exe=self.emergent_exe)
+                # Done
+                self.queue.task_done()
+                self.queue_output.put(flag)
+                if pbar:
+                    self.pbar.update(self.queue_output.qsize())
+        except Empty:
+            if not silent:
+                print "Empty"
+            return
+
 
 class RegisteredModels(object):
     def __init__(self):
-        self.registered_models = []
-        self.instantiated_models = []
-        self.instantiated_models_dict = {}
-        self.prefix = '/home/wiecki/working/projects/bg_inhib/'
-        #self.log_dir = None
+        self.registered_models = set()
+        self.groups = {}
 
-    def _instantiate(self, **kwargs):
-        for model in self.registered_models:
-            self.instantiated_models.append(model(prefix=self.prefix, **kwargs))
-            self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
-
-    def _queue(self):
-        assert len(self.instantiated_models) != 0, "Insantiate models first by calling _instantiate()"
+    def register(self, model):
+        """Register model so that it can be run automatically by
+        calling the pools.run() function."""
+        self.registered_models.add(model)
         
-        for model in self.instantiated_models:
-	    model.queue_jobs()
+        return model
     
-    def prepare_queue(self, groups=None, **kwargs):
-        """Instantiates and queues models. This is used when we need
-        to get the queue length."""
-        self._check(groups=groups, **kwargs)
-        self._queue()
+    def register_group(self, groups):
+        def reg(model):
+            self.register(model)
+            
+            for group in groups:
+                if not self.groups.has_key(group):
+                    self.groups[group] = set()
+                self.groups[group].add(model)
+            return model
+        return reg
 
-    def _check(self, groups=None, **kwargs):
-        """Check if models are registered and instantiated. If not,
-        register and instantiate them."""
-
-        if len(self.registered_models) == 0:
-            # If models were not set externally, set them to the registered ones
-            if groups is None:
-                self.registered_models = pools.registered_models
-            else:
-                group_models = []
-                # Gather all models from all groups and create intersection
-                for group in groups:
-                    assert pools.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(pools.groups.keys())
-                    group_models.append(pools.groups[group])
-                self.registered_models = set.intersection(*group_models)
-                    
-
-	if len(self.instantiated_models) == 0:
-	    # Models have not been instantiated yet
-	    self._instantiate(**kwargs)
-
-    def run_and_analyze(self, groups=None, silent=True, run=True, analyze=True, hosts=None, **kwargs):
-        if run:
-            self.run(groups=groups, silent=silent, hosts=hosts, **kwargs)
-        if analyze:
-            self.analyze(groups=groups, **kwargs)
-
-        return self.instantiated_models
-        
-    def run(self, groups=None, silent=True, hosts=None, **kwargs):
-        self.prepare_queue(groups=groups, **kwargs)
-	pools.start_and_join_workers(silent=silent, hosts=hosts)
-        
-        return self.instantiated_models
-
-    def analyze(self, groups=None, **kwargs):
-        self._check(groups=groups, **kwargs)
-
-        for model in self.instantiated_models:
-            model.load_logs()
-	    model.preprocess_data()
-            model.analyze()
-
-        return self.instantiated_models
-
-    def run_jobs_mpi(self, run=True, analyze=False):
-        from mpi4py import MPI
-        #self._check(**kwargs)
-        #self._queue()
-
-        if MPI.COMM_WORLD.Get_rank() == 0:
-            pools.mpi_controller(run=run, analyze=analyze)
-        else:
-            pools.mpi_worker()
-    
-    def cluster_run_model(self, idx):
-        """Run MPI job for only one model (with all batches and all
-        conditions.  
-        Arguments: 
-        idx: which model to run.
-        """
-
-        from mpi4py import MPI
-        self._instantiate()
-
-        # Put jobs of model into queue
-        assert (idx+1) < len(self.instantiated_models), "Model index not found"
-        model = self.instantiated_models[idx]
-        model.queue_jobs()
-        
-        self.run_jobs_mpi(run=run, analyze=analyze)
 
 # Convenience aliases
 registered_models = RegisteredModels()
-run = registered_models.run_and_analyze
-register = pools.register
-register_group = pools.register_group
+register = registered_models.register
+register_group = registered_models.register_group
 
 def dict_to_list(dict):
     """Convert dictionary to list where each item is 'key=value'.
@@ -427,10 +436,6 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
                   If you want to run only local, without ssh, simply set hosts={'local':x}
 
     additional keywoard args are passed to the model class."""
-    # initialize (sometimes when a run did not finish old jobs hang around in
-    # the queue)
-    pools.terminate_workers()
-    
     # create instance of the model
     model = model_class(**kwargs)
     if run:
@@ -446,7 +451,7 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
     return model
 
 @Retry(3)
-def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False):
+def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False, emergent_exe=None):
     """Call emergent with the provided flags(list).
     A prefix can be provided which will be inserted before emergent."""
     import os
@@ -462,10 +467,10 @@ def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False):
             prefix = []
 
         # Is there an alternate emergent executable defined? (e.g. when running on a cluster)
-        if pools.emergent_exe is None:
-            emergent_call = prefix + ['nice', '-n', '19', 'emergent','-nogui','-ni','-p'] + flags
+        if emergent_exe is None:
+            emergent_call = prefix + ['nice', '-n', '0', 'emergent','-nogui','-ni','-p'] + flags
         else:
-            emergent_call = prefix + [pools.emergent_exe] + ['-nogui','-ni','-p'] + flags
+            emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
         
         if silent:
             if errors:
@@ -477,7 +482,4 @@ def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False):
                                 stderr=open(os.devnull,'w'))
         else:
             print(" ".join(emergent_call))
-            if mpi:
-                subprocess.call(emergent_call)
-            else:
-                subprocess.call(emergent_call)
+            subprocess.call(emergent_call)

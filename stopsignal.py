@@ -40,8 +40,8 @@ class StopSignalBase(emergent.Base):
     def __init__(self, **kwargs):
 	super(StopSignalBase, self).__init__(**kwargs)
 	self.flag['task'] = 'STOP_SIGNAL'
-        self.flag['DLPFC_speed_mean'] = 0.01
-        self.flag['DLPFC_speed_std'] = 0
+        #self.flag['DLPFC_speed_mean'] = 0.01
+        #self.flag['DLPFC_speed_std'] = 0
 	self.SSRT = {}
 	self.GoRT = {}
 	self.GoRTcode = {}
@@ -602,8 +602,8 @@ class IFGLesion(StopSignalBase):
     def __init__(self, IFG_lesions=(0,0.1,0.2,0.3), **kwargs):
 	super(IFGLesion, self).__init__(**kwargs)
 	self.flag['test_SSD_mode'] = True
-        self.flag['SSD_start'] = 0
-        self.flag['SSD_stop'] = 70
+        self.flag['SSD_start'] = 30
+        self.flag['SSD_stop'] = 120
 	#self.flag['SS_prob'] = 1.
 	self.tags = []
 	self.names = []

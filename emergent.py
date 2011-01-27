@@ -59,14 +59,15 @@ class Base(object):
 	self.ddms = {}
 	self.ddms_results = {}
 	#self.hhm = hhm.hhm()
-	
-	self.flag = {'proj': self.prefix+self.proj + '.proj',
+
+        self.flag = {'proj': self.prefix+self.proj + '.proj',
 		     'log_dir': self.log_dir,
 		     'batches': 1,
                      'debug': debug,
                      'SZ_mode': 'false',
-                     'rnd_seed': 'NEW_SEED',
-                     'LC_mode': 'phasic'}
+                     'rnd_init': 'NEW_SEED',
+                     'LC_mode': 'phasic',
+                     'motivational_bias': 'NO_BIAS'}
 
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
@@ -75,9 +76,8 @@ class Base(object):
             except OSError:
                 pass
 
-    def _split_batches(self):
-        """Called by queue_jobs.
-        Gives each batch run its own emergent job so that each batch can run in
+    def split_batches(self):
+        """Gives each batch run its own emergent job so that each batch can run in
         an individual process for better multiprocessing."""
 	new_flag = {}
 	flags = []
@@ -88,13 +88,6 @@ class Base(object):
 		flags.append(new_flag)
 
 	return flags
-
-    def queue_jobs(self, silent=True):
-	# Split the flags to include individual runs for every single batch
-	# (instead of one run with multiple batches)
-	split_jobs = self._split_batches()
-	# Put jobs in queue
-        pools.pools.queue_jobs(split_jobs)
 
     def _preprocess_logs(self, log_type, converters=None):
 	"""Load in log files. Populates data."""
@@ -163,21 +156,22 @@ class Base(object):
     def fit_hddm(self, depends_on=None, plot=True, **kwargs):
         import hddm
         # Remove outliers
-        self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
+        #self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
 
-        model = hddm.Multi(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, init_EZ=False, **kwargs)
+        model = hddm.HDDM(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, init=False, **kwargs)
+        model._param_factory.param_ranges['t_upper'] = 2.
         model.mcmc(samples=4000, burn=2000)
 
         if plot:
-            self.new_fig()
-            model.plot()
-            self.save_fig('DDM_fits')
+            #self.new_fig()
+            hddm.utils.plot_rt_fit(model)
+            self.save_plot('DDM_fits')
 
         return model
 
     def fit_hlba(self, depends_on, plot=False, **kwargs):
         import hddm
-        model = hddm.Multi(self.hddm_data, model_type='LBA', depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
+        model = hddm.HDDM(self.hddm_data, model_type='LBA', depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
         model.mcmc()
 
         if plot:
@@ -190,7 +184,6 @@ class BaseCycle(Base):
     def __init__(self, **kwargs):
 	super(BaseCycle, self).__init__(**kwargs)
 	self.flag['log_cycles'] = True
-
 
     def load_logs(self):
 	self.load_logs_type(['trl', 'cyc'])
@@ -268,7 +261,7 @@ class BaseCycle(Base):
 def load_log(fname):
     dtype = convert_header_np(fname)
     try:
-        if np.__version__ == '1.5.0':
+        if np.__version__.startswith('1.5.0'):
             data = np.genfromtxt(fname, dtype=dtype, skip_header=True)
         else:
             data = np.genfromtxt(fname, dtype=dtype, skiprows=1)
@@ -515,7 +508,6 @@ def main():
             pools.registered_models.prefix = prefix
         elif o in ('-e', '--emergent'):
             emergent = a
-            pools.pools.emergent_exe = emergent
         elif o in ('-l', '--logdir'):
             log_dir = a
         elif o in ('-s', '--set_python_exec'):
@@ -524,13 +516,13 @@ def main():
             usage()
 
     if master or slave or analyze:
-
         # Queue models to find out how many jobs there are
         import antisaccade
         import stopsignal
 
-        pools.registered_models.prepare_queue(batches=4)
-   
+        pool = pools.PoolMPI()
+        pool.emergent_exe = emergent
+
     if master:
         if prefix is None:
             print "Please provide the prefix directory"
@@ -538,7 +530,7 @@ def main():
         write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir)
 
     elif slave or analyze:
-        pools.registered_models.run_jobs_mpi(run=slave, analyze=analyze) #log_dir_abs=log_dir)
+        pool.start_jobs(run=slave, analyze=analyze, batches=16) #log_dir_abs=log_dir)
 
 if __name__ == '__main__':
     import doctest
