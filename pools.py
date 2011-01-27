@@ -328,6 +328,8 @@ class PoolSSH(Pool):
         self.join_workers()
 
     def terminate_workers(self):
+        from Queue import Empty, Full
+        
         if len(self.processes) != 0:
             for process in self.processes:
                 process.terminate()
@@ -363,6 +365,7 @@ class PoolSSH(Pool):
 
     def worker(self, host, silent):
         from Queue import Empty, Full
+        
         if host != 'local':
             command = ['ssh', host]
         else:
