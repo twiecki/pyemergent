@@ -436,7 +436,7 @@ class PoolSSH(Pool):
             if not silent:
                 print "Empty"
 
-    def worker_analyze(silent):
+    def worker_analyze(self, silent):
         try:
             while(True):
                 recv = self.queue_anal.get(timeout=20)
