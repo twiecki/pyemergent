@@ -386,7 +386,7 @@ class PoolSSH(Pool):
             self.terminate_workers()
 
         if self.analyze:
-            for i in range(num_threads):
+            for i in range(16):
                 proc = multiprocessing.Process(target=self.worker_analyze, args=(self.silent))
                 self.processes.append(proc)
                 
