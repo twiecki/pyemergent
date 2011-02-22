@@ -28,45 +28,55 @@ except:
 
 
 import time
+import math
+# Retry decorator with exponential backoff
+def retry(tries, delay=3, backoff=2):
+  """Retries a function or method until it returns True.
+  
+  delay sets the initial delay, and backoff sets how much the delay should
+  lengthen after each failure. backoff must be greater than 1, or else it
+  isn't really a backoff. tries must be at least 0, and delay greater than
+  0."""
 
-class Retry(object):
-    default_exceptions = (Exception)
-    def __init__(self, tries, exceptions=None, delay=0):
-        """
-        Decorator for retrying function if exception occurs
-        
-        tries -- num tries
-        exceptions -- exceptions to catch
-        delay -- wait between retries
-        """
-        self.tries = tries
-        if exceptions is None:
-            exceptions = Retry.default_exceptions
-        self.exceptions =  exceptions
-        self.delay = delay
+  if backoff <= 1:
+    raise ValueError("backoff must be greater than 1")
 
-    def __call__(self, f):
-        def fn(*args, **kwargs):
-            exception = None
-            for _ in range(self.tries):
-                try:
-                    return f(*args, **kwargs)
-                except self.exceptions, e:
-                    print "Retry, exception: "+str(e)
-                    time.sleep(self.delay)
-                    exception = e
-            #if no success after tries, raise last exception
-            raise exception
-        return fn
+  tries = math.floor(tries)
+  if tries < 0:
+    raise ValueError("tries must be 0 or greater")
 
+  if delay <= 0:
+    raise ValueError("delay must be greater than 0")
+
+  def deco_retry(f):
+    def f_retry(*args, **kwargs):
+      mtries, mdelay = tries, delay # make mutable
+
+      rv = f(*args, **kwargs) # first attempt
+      while mtries > 0:
+        if rv == True: # Done on success
+          return True
+
+        mtries -= 1      # consume an attempt
+        time.sleep(mdelay) # wait...
+        mdelay *= backoff  # make future wait longer
+
+        rv = f(*args, **kwargs) # Try again
+
+      return False # Ran out of tries :-(
+
+    return f_retry # true decorator -> decorated function
+  return deco_retry  # @retry(arg[, ...]) -> true decorator
 
 class Pool(object):
-    def __init__(self):
+    def __init__(self, prefix=None, emergent_exe=None, silent=False, analyze=True):
         self.instantiated_models = []
         self.instantiated_models_dict = {}
         self.selected_models = set()
-        self.emergent_exe = None
-
+        self.emergent_exe = emergent_exe
+        self.silent = silent
+        self.prefix = prefix
+        
     def queue_jobs(self):
         """Put jobs in the queue to be processed"""
         assert len(self.instantiated_models) != 0, "Insantiate models first by calling _instantiate()"
@@ -80,7 +90,7 @@ class Pool(object):
         """Instantiate selected models (select via select())."""
         assert len(self.selected_models) != 0, "No models selected."
         for model in self.selected_models:
-            self.instantiated_models.append(model(**kwargs))
+            self.instantiated_models.append(model(prefix=self.prefix, **kwargs))
             self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
 
     def prepare(self, queue=True, **kwargs):
@@ -94,10 +104,10 @@ class Pool(object):
             model.preprocess_data()
             model.analyze()
             
-    def select(self, groups=None, exclude=None, all=False):
+    def select(self, groups=None, exclude=None):
         """Check if models are registered and instantiated. If not,
         register and instantiate them."""
-        if all:
+        if groups is None:
             groups = registered_models.groups.keys()
 
         if exclude is None:
@@ -121,10 +131,10 @@ class Pool(object):
 
 
 class PoolMPI(Pool):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.queue = []
         self.processes = []
-        super(PoolMPI, self).__init__()
+        super(PoolMPI, self).__init__(**kwargs)
             
     def queue_job(self, item):
         """Put one job in the queue to be processed"""
@@ -132,6 +142,11 @@ class PoolMPI(Pool):
 
     def start_jobs(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
+
+        # Put all jobs in the queue
+        self.select()
+        self.prepare(**kwargs)
+
         rank = MPI.COMM_WORLD.Get_rank()
         if rank == 0:
             self.mpi_controller(run=run, analyze=analyze, **kwargs)
@@ -141,10 +156,6 @@ class PoolMPI(Pool):
     # MPI function for usage on cluster
     def mpi_controller(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
-
-        # Put all jobs in the queue
-        self.select(all=True)
-        self.prepare(**kwargs)
         
         process_list = range(1, MPI.COMM_WORLD.Get_size())
         rank = MPI.COMM_WORLD.Get_rank()
@@ -157,6 +168,7 @@ class PoolMPI(Pool):
             raise ValueError('Either run or analyze can be true. Call this function twice.')
 
         if run:
+            print self.queue
             workers_done = []
             queue = iter(self.queue)
             # Feed all queued jobs to the childs
@@ -164,7 +176,7 @@ class PoolMPI(Pool):
                 # Create iterator
                 status = MPI.Status()
                 recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-                print "Controller: received tag %i" % status.tag
+                print "Controller: received tag %i from %s" % (status.tag, status.source)
                 if status.tag == 10:
                     try:
                         task = queue.next()
@@ -201,7 +213,7 @@ class PoolMPI(Pool):
         # All jobs finished, analyze.
         if analyze:
             print "Controller: Analyzing jobs"
-            iter_models = registered_models.instantiated_models_dict.iterkeys()
+            iter_models = self.instantiated_models_dict.iterkeys()
             while(True):
                 status = MPI.Status()
                 recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
@@ -260,13 +272,14 @@ class PoolMPI(Pool):
             if status.tag == 10:
                 # Run emergent
                 print "Worker %i on %s: Calling emergent: %s" % (rank, proc_name, recv)
-                call_emergent(dict_to_list(recv), mpi=True, emergent_exe=self.emergent_exe)
+                #recv['debug'] = True
+                call_emergent(dict_to_list(recv), mpi=True, emergent_exe=self.emergent_exe, prefix=self.prefix)
 
             elif status.tag == 11:
                 # Analyze model
                 print "Worker %i on %s: Analyzing model %s" % (rank, proc_name, recv)
                 try:
-                    model = registered_models.instantiated_models_dict[recv]
+                    model = self.instantiated_models_dict[recv]
                     model.load_logs()
                     model.preprocess_data()
                     model.analyze()
@@ -287,27 +300,46 @@ class PoolSSH(Pool):
     pbar: the progress bar
     processes: the workers"""
     
-    def __init__(self):
+    def __init__(self, **kwargs):
         import multiprocessing
         from Queue import Empty, Full
-        
+
         self.queue = multiprocessing.JoinableQueue()
+        self.queue_anal = multiprocessing.JoinableQueue()
+        
         self.queue_output = multiprocessing.Queue()
+        
         if pbar:
             self.pbar = progressbar.ProgressBar()
         self.processes = []
 
-        super(PoolSSH, self).__init__()
+        if kwargs.has_key('hosts'):
+            hosts = kwargs['hosts']
+            del kwargs['hosts']
+        else:
+            hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3, 'darpp32': 3, 'theta':7}
 
-    def run(self, hosts=None, run=True, analyze=True, groups=None, all=False, **kwargs):
-        self.select(groups=groups, all=all)
-        if run:
-            self.prepare(**kwargs)
-            self.start_and_join_workers()
+        self.hosts = hosts
+        
+        super(PoolSSH, self).__init__(**kwargs)
 
-        if analyze:
-            self._instantiate(**kwargs)
-            self.analyze()
+    def run(self, run=True, analyze=True, groups=None, **kwargs):
+        self.run = run
+        self.analyze = analyze
+        
+        self.select(groups=groups)
+
+        self.prepare(**kwargs)
+
+        # Fill model queue
+        for model in self.instantiated_models_dict.iterkeys():
+            self.queue_anal.put(model)
+            
+        self.start_workers()
+
+        #if analyze:
+        #    self._instantiate(**kwargs)
+        #    self.analyze()
             
             
     def queue_job(self, item):
@@ -316,16 +348,6 @@ class PoolSSH(Pool):
 	# Update the progress bar
         if pbar:
             self.pbar.maxval = self.queue.qsize()
-
-    def join_workers(self):
-        self.queue.join()
-        # After successful completion, terminate all workers to tidy up
-        self.terminate_workers()
-    
-    def start_and_join_workers(self, hosts=None, silent=True):
-        # Convenience function
-        self.start_workers(hosts=hosts, silent=silent)
-        self.join_workers()
 
     def terminate_workers(self):
         from Queue import Empty, Full
@@ -343,27 +365,53 @@ class PoolSSH(Pool):
             pass
         #self.pbar.finish()
 
-    def start_workers(self, hosts=None, silent=True):
+    def start_workers(self):
         import multiprocessing
-
-        if hosts is None:
-            hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3, 'darpp32': 3, 'theta':7}
-            #hosts = {'cycle':2, 'bike':2, 'ski':2, 'ride':2}
-            #hosts = {'cycle':2, 'bike':2, 'ski':1, 'drd2':3}
-            #hosts = {'drd2':4}
 
         if pbar:
             self.pbar.start()
-        for host, num_threads in hosts.iteritems():
+
+        if self.run:
+            for host, num_threads in self.hosts.iteritems():
+                # Create worker threads for every host
+                for i in range(num_threads):
+                    if not self.silent:
+                        print "Launching process for " + host
+                    proc = multiprocessing.Process(target=self.worker, args=(host, self.silent, self.emergent_exe))
+                    proc.start()
+                    self.processes.append(proc)
+
+            self.queue.join()
+            # After successful completion, terminate all workers to tidy up
+            self.terminate_workers()
+
+        if self.analyze:
+            for i in range(num_threads):
+                proc = multiprocessing.Process(target=self.worker_analyze, args=(self.silent))
+                self.processes.append(proc)
+                
+            self.queue_analyze.join()
+            # After successful completion, terminate all workers to tidy up
+            self.terminate_workers()
+
+        
+    def start_workers_analyze(self):
+        if pbar:
+            self.pbar.start()
+            
+        for num_threads in self.hosts():
             # Create worker threads for every host
             for i in range(num_threads):
-                if not silent:
+                if not self.silent:
                     print "Launching process for " + host
-                proc = multiprocessing.Process(target=self.worker, args=(host,silent))
+                proc = multiprocessing.Process(target=self.worker, args=(host, self.silent, self.emergent_exe, self.run, self.analyze))
                 proc.start()
                 self.processes.append(proc)
 
-    def worker(self, host, silent):
+
+        
+
+    def worker(self, host, silent, emergent_exe):
         from Queue import Empty, Full
         
         if host != 'local':
@@ -377,8 +425,8 @@ class PoolSSH(Pool):
                     flag = self.queue.get(timeout=20)
                 except Empty:
                     flag = self.queue.get(timeout=10)
-                    
-                call_emergent(dict_to_list(flag), prefix=command, silent=silent, emergent_exe=self.emergent_exe)
+
+                call_emergent(dict_to_list(flag), prefix=command, silent=silent, emergent_exe=emergent_exe)
                 # Done
                 self.queue.task_done()
                 self.queue_output.put(flag)
@@ -387,7 +435,27 @@ class PoolSSH(Pool):
         except Empty:
             if not silent:
                 print "Empty"
-            return
+
+    def worker_analyze(silent):
+        try:
+            while(True):
+                recv = self.queue_anal.get(timeout=20)
+                model = self.instantiated_models_dict[recv]
+                model.load_logs()
+                model.preprocess_data()
+                model.analyze()
+                
+                self.queue_anal.task_done()
+                
+                if pbar:
+                    self.pbar.update(self.queue_output.qsize())
+        except Empty:
+            if not silent:
+                print "Empty"
+
+        
+
+        
 
 
 class RegisteredModels(object):
@@ -453,36 +521,51 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
 
     return model
 
-@Retry(3)
-def call_emergent(flags, prefix=None, silent=False, errors=False, mpi=False, emergent_exe=None):
+@retry(3)
+def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emergent_exe=None):
     """Call emergent with the provided flags(list).
     A prefix can be provided which will be inserted before emergent."""
     import os
 
     if mpi:
-        emergent_call = ['/gpfs/home/wiecki/BG_inhib/pyemergent/call_emergent.sh','-nogui','-ni','-p'] + flags
+        #emergent_call = ['/gpfs/home/wiecki/BG_inhib/pyemergent/call_emergent.sh','-nogui','-ni','-p'] + flags
         # Using the older os.system() here because subprocess leads to
         # python segfaults when running on multiple nodes. No idea why.
-        os.system(' '.join(emergent_call))
-
-    else:
-        if prefix is None:
-            prefix = []
-
-        # Is there an alternate emergent executable defined? (e.g. when running on a cluster)
-        if emergent_exe is None:
-            emergent_call = prefix + ['nice', '-n', '0', 'emergent','-nogui','-ni','-p'] + flags
-        else:
-            emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
+        #subprocess.call(emergent_call)
+        #print "Calling %s" % ' '.join(emergent_call)
+        #ret_val = os.system(' '.join(emergent_call))
+        #print "os.system return value: %i" % ret_val
+        from mpi4py import MPI
+        print "Launching job"
+        comm = MPI.COMM_SELF.Spawn('emergent',
+                                   args=['-nogui','-ni','-p'] + flags)
+        print "Finished? Disconnecting."
+        comm.Disconnect()
         
-        if silent:
-            if errors:
-                subprocess.call(emergent_call,
-                                stdout=open(os.devnull,'w'))
-            else:
-                subprocess.call(emergent_call,
-                                stdout=open(os.devnull,'w'),
-                                stderr=open(os.devnull,'w'))
+
+
+    if prefix is None:
+        prefix = []
+    elif type(prefix) is not list:
+        prefix = [prefix]
+
+    # Is there an alternate emergent executable defined? (e.g. when running on a cluster)
+    if emergent_exe is None:
+        emergent_call = prefix + ['emergent','-nogui','-ni','-p'] + flags
+    else:
+        emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
+
+    if silent:
+        if errors:
+            retcode = subprocess.call(emergent_call,
+                                      stdout=open(os.devnull,'w'))
         else:
-            print(" ".join(emergent_call))
-            subprocess.call(emergent_call)
+            retcode = subprocess.call(emergent_call,
+                                      stdout=open(os.devnull,'w'),
+                                      stderr=open(os.devnull,'w'))
+    else:
+        print(" ".join(emergent_call))
+        retcode = subprocess.call(emergent_call)
+
+    print retcode
+    return (retcode == 0)

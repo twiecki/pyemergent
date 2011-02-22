@@ -478,18 +478,21 @@ def usage():
     
 def main():
     import getopt
+    import pools
 
     # Set defaults
     master = False
-    slave = False
+    mpi = False
     analyze = False
     prefix = None
     emergent = None
     set_python_exec = None
     log_dir = None
-
+    ssh = False
+    run = False
+    
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'wmn:f:p:e:l:s:ah', ['write', 'mpi', 'nodes', 'prefix', 'emergent', 'log_dir', 'set_python_exec', 'analyze', 'help'])
+        opts, args = getopt.getopt(sys.argv[1:], 'wmn:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
@@ -498,39 +501,48 @@ def main():
         if o in ('-w', '--write'):
             master=True
         elif o in ('-m', '--mpi'):
-            slave=True
+            mpi=True
         elif o in ('-n', '--nodes'):
             nodes = int(a)
+        elif o in ('-r', '--run'):
+            analyze = True
         elif o in ('-a', '--analyze'):
             analyze = True
         elif o in ('-p', '--prefix'):
             prefix = a
-            pools.registered_models.prefix = prefix
         elif o in ('-e', '--emergent'):
             emergent = a
         elif o in ('-l', '--logdir'):
             log_dir = a
-        elif o in ('-s', '--set_python_exec'):
-            set_python_exec = a
+        elif o in ('-s', '--ssh'):
+            ssh = True
         elif o in ('-h', '--help'):
             usage()
 
-    if master or slave or analyze:
-        # Queue models to find out how many jobs there are
-        import antisaccade
-        import stopsignal
+    # Queue models to find out how many jobs there are
+    import antisaccade
+    import stopsignal
 
-        pool = pools.PoolMPI()
-        pool.emergent_exe = emergent
+    if mpi:
+        pool = pools.PoolMPI(emergent_exe=emergent, prefix=prefix)
 
+    elif ssh:
+        hosts = ['smp00%i'%i for i in range(3,10) if i!=5]
+        hosts_dict = {}
+        for host in hosts:
+            hosts_dict[host] = 16
+        pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
+        
     if master:
         if prefix is None:
             print "Please provide the prefix directory"
             sys.exit(2)
         write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir)
 
-    elif slave or analyze:
-        pool.start_jobs(run=slave, analyze=analyze, batches=16) #log_dir_abs=log_dir)
+    elif mpi:
+        pool.start_jobs(run=run, analyze=analyze, batches=16) #log_dir_abs=log_dir)
+    elif ssh:
+        pool.run(run=run, analyze=analyze)
 
 if __name__ == '__main__':
     import doctest

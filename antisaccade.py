@@ -126,7 +126,7 @@ class Saccade(emergent.Base):
 
     def analyze(self):
 	self.plot_RT_histogram()
-	self.save_plot("Hikosaka_switch_histo")
+	self.save_plot("RT_histo")
 
         self.new_fig()
         self.plot_RT()
@@ -244,7 +244,7 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
 	    #plt.ylim((0, 200))
 
-	plt.legend(loc=0, fancybox=True)
+	plt.legend(loc=1, fancybox=True)
 
     def plot_error(self, inhibited_as_error=False):
 	for i,tag in enumerate(self.tags):
@@ -768,7 +768,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	#self.analyse_preSMA_act_anti_pro()
 	#self.save_plot("preSMA_act_pro_anti")
 
-    def plot_RT_histogram(self, bins=75, range=(0,200), save=True, grid=True, cutoff=None, saccade=None):
+    def plot_RT_histogram(self, bins=75, range=(0,200), save=False, grid=True, cutoff=None, saccade=None):
         if saccade is None:
             saccade = '"Antisaccade"'
         elif saccade == 'anti':
@@ -1082,7 +1082,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             pass
         #plt.legend(loc=0)
 
-@pools.register_group(['flanker'])
+@pools.register_group(['flanker', 'cycle'])
 class FlankerCycle(SaccadeBaseCycle):
     def __init__(self, **kwargs):
         super(FlankerCycle, self).__init__(task='FLANKER', **kwargs)
