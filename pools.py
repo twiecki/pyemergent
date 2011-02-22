@@ -334,8 +334,12 @@ class PoolSSH(Pool):
         # Fill model queue
         for model in self.instantiated_models_dict.iterkeys():
             self.queue_anal.put(model)
-            
-        self.start_workers()
+        
+        if run:
+            self.start_workers()
+
+        if analyze:
+            self.start_workers_analyze()
 
         #if analyze:
         #    self._instantiate(**kwargs)
@@ -371,45 +375,18 @@ class PoolSSH(Pool):
         if pbar:
             self.pbar.start()
 
-        if self.run:
-            for host, num_threads in self.hosts.iteritems():
-                # Create worker threads for every host
-                for i in range(num_threads):
-                    if not self.silent:
-                        print "Launching process for " + host
-                    proc = multiprocessing.Process(target=self.worker, args=(host, self.silent, self.emergent_exe))
-                    proc.start()
-                    self.processes.append(proc)
-
-            self.queue.join()
-            # After successful completion, terminate all workers to tidy up
-            self.terminate_workers()
-
-        if self.analyze:
-            for i in range(16):
-                proc = multiprocessing.Process(target=self.worker_analyze, args=(self.silent))
-                self.processes.append(proc)
-                
-            self.queue_analyze.join()
-            # After successful completion, terminate all workers to tidy up
-            self.terminate_workers()
-
-        
-    def start_workers_analyze(self):
-        if pbar:
-            self.pbar.start()
-            
-        for num_threads in self.hosts():
+        for host, num_threads in self.hosts.iteritems():
             # Create worker threads for every host
             for i in range(num_threads):
                 if not self.silent:
                     print "Launching process for " + host
-                proc = multiprocessing.Process(target=self.worker, args=(host, self.silent, self.emergent_exe, self.run, self.analyze))
+                proc = multiprocessing.Process(target=self.worker, args=(host, self.silent, self.emergent_exe))
                 proc.start()
                 self.processes.append(proc)
 
-
-        
+        self.queue.join()
+        # After successful completion, terminate all workers to tidy up
+        self.terminate_workers()
 
     def worker(self, host, silent, emergent_exe):
         from Queue import Empty, Full
@@ -435,8 +412,26 @@ class PoolSSH(Pool):
         except Empty:
             if not silent:
                 print "Empty"
+        
+    def start_workers_analyze(self):
+        import multiprocessing
 
-    def worker_analyze(self, silent):
+        if pbar:
+            self.pbar.start()
+            
+        # Create worker threads for every host
+        for i in range(16):
+            proc = multiprocessing.Process(target=self.worker_analyze)
+            proc.start()
+            self.processes.append(proc)
+
+        self.queue_anal.join()
+        # After successful completion, terminate all workers to tidy up
+        self.terminate_workers()
+
+    def worker_analyze(self):
+        from Queue import Empty, Full
+
         try:
             while(True):
                 recv = self.queue_anal.get(timeout=20)
@@ -449,9 +444,9 @@ class PoolSSH(Pool):
                 
                 if pbar:
                     self.pbar.update(self.queue_output.qsize())
+
         except Empty:
-            if not silent:
-                print "Empty"
+            pass
 
         
 

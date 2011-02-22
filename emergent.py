@@ -505,7 +505,7 @@ def main():
         elif o in ('-n', '--nodes'):
             nodes = int(a)
         elif o in ('-r', '--run'):
-            analyze = True
+            run = True
         elif o in ('-a', '--analyze'):
             analyze = True
         elif o in ('-p', '--prefix'):
