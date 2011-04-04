@@ -94,7 +94,7 @@ class Saccade(emergent.Base):
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 	    self.flags[-1]['tonic_DA_intact'] = 0.029
-	    self.flags[-1]['STN_lesion'] = True
+	    self.flags[-1]['STN_lesion'] = .5
 
         if motivation:
             self.flags.append(copy(self.flag))
@@ -126,7 +126,7 @@ class Saccade(emergent.Base):
 
     def analyze(self):
 	self.plot_RT_histogram()
-	self.save_plot("RT_histo")
+	#self.save_plot("RT_histo")
 
         self.new_fig()
         self.plot_RT()
@@ -183,7 +183,7 @@ class Saccade(emergent.Base):
 
     def quantize_cdf(self, data):
         # Select non-inhibited, correct trials.
-        idx_as = (data['inhibited']==0)  & (data['trial_name'] == '"Antisaccade"')
+        idx_as = (data['inhibited']==0) & (data['trial_name'] == '"Antisaccade"')
         #debug_here()
         quant, idx_quant = quantize(data[idx_as]['minus_cycles'])
         cdf = np.empty_like(quant)
@@ -508,7 +508,7 @@ class SaccadeDDMBase(Saccade):
     def analyze(self):
         if self.plot:
             self.plot_RT_histogram()#(cutoff=50)
-            self.save_plot('RT_histogram')
+            #self.save_plot('RT_histogram')
             #self.plot_RT_histogram(saccade='pro')#(cutoff=50)
             #self.save_plot('RT_histogram_pro')
 
@@ -642,12 +642,16 @@ class SaccadeDDMBase(Saccade):
         
 @pools.register_group(['saccade', 'DDM', 'DLPFC', 'nocycle', 'mean'])
 class SaccadeDDMDLPFC_mean(SaccadeDDMBase):
-    def __init__(self, start=0.01, stop=0.07, samples=5, **kwargs):
+    def __init__(self, start=-0.05, stop=0.05, samples=5, **kwargs):
         super(SaccadeDDMDLPFC_mean, self).__init__(**kwargs)
-        self.set_flags_condition('DLPFC_speed_mean', start, stop, samples)
+        self.set_flags_condition('DLPFC_speed_mean_mod', start, stop, samples)
 
-        #for flag in self.flags:
-        #    flag['DLPFC_speed_std'] = 0.01
+
+@pools.register_group(['saccade', 'DDM', 'STN'])
+class SaccadeDDMSTN(SaccadeDDMBase):
+    def __init__(self, start=0.0, stop=1., samples=5, **kwargs):
+        super(self.__class__, self).__init__(**kwargs)
+        self.set_flags_condition('STN_lesion', start, stop, samples)
 
 @pools.register_group(['saccade', 'DDM', 'speed_acc'])
 class SaccadeDDMSpeedAcc(SaccadeDDMBase):
@@ -662,14 +666,10 @@ class SaccadeDDMSpeedAcc(SaccadeDDMBase):
         self.flag['tag'] = '_' + self.tags[-1]
         self.flag['motivational_bias'] = 'ACC_BIAS'
         self.flags.append(copy(self.flag))
-        
-#@pools.register_group(['saccade', 'DDM', 'DLPFC', 'nocycle', 'std'])
-class SaccadeDDMDLPFC_std(SaccadeDDMBase):
-    def __init__(self, start=0.0, stop=0.9, samples=7, **kwargs):
-        super(SaccadeDDMDLPFC_std, self).__init__(**kwargs)
-        self.depends = ['z', 'sz', 'a']
-        self.set_flags_condition('DLPFC_speed_std', start, stop, samples)
 
+        self.x = [0,1]
+        self.condition = 'SpeedAcc'
+        
 #@pools.register_group(['saccade', 'DDM', 'thalam', 'nocycle'])
 class SaccadeDDMThalam(SaccadeDDMBase):
     def __init__(self, start=0.65, stop=.8, samples=5, **kwargs):
@@ -678,7 +678,7 @@ class SaccadeDDMThalam(SaccadeDDMBase):
 
 @pools.register_group(['saccade', 'DDM', 'DA', 'nocycle'])
 class SaccadeDDMDA(SaccadeDDMBase):
-    def __init__(self, start=0.027, stop=0.04, samples=10, **kwargs):
+    def __init__(self, start=0.027, stop=0.032, samples=10, **kwargs):
         super(SaccadeDDMDA, self).__init__(**kwargs)
         self.set_flags_condition('tonic_DA_SZ', start, stop, samples)
         for flag in self.flags:
@@ -1089,7 +1089,7 @@ class FlankerCycle(SaccadeBaseCycle):
 
     def analyze(self):
         self.plot_RT_histogram()
-	self.save_plot("RT_histo")
+	#self.save_plot("RT_histo")
         
 	self.new_fig()
 	self.analyse_preSMA_act()

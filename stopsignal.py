@@ -269,7 +269,7 @@ class NorepinephrineNoStair(StopSignalBase):
         
 	self.flag['test_SSD_mode'] = True
         self.flag['SSD_start'] = 0
-        self.flag['SSD_stop'] = 70
+        self.flag['SSD_stop'] = 40
 
         self.flag['LC_mode'] = self.tags[0]
         self.flag['tag'] = '_'+self.tags[0]
@@ -288,64 +288,6 @@ class NorepinephrineNoStair(StopSignalBase):
         self.save_plot('NE_SSD_vs_inhib')
 
 
-#@pools.register_group(['atomoxetine'])
-class Atomoxetine(StopSignalBase):
-    def __init__(self, dec_array=(), mag_array=(), **kwargs):
-	"""Test effects of the norepinephrine (NE) reuptake inhibitor Atomoxetine on StopSignal performance
-
-	dec_array: array of parameters to check for how fast the NE burst is goes back to tonic
-	mag_array: array of parameters to check for how big an NE burst is."""
-	
-	super(Atomoxetine, self).__init__(**kwargs)
-
-	if len(dec_array) == 0:
-	    dec_array = np.linspace(0,0.1,5)
-	if len(mag_array) == 0:
-	    mag_array = np.linspace(0,1,5)
-	    
-	self.flag['atomoxetine'] = True
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-	
-	self.tags = []
-
-	self.dec_array = dec_array
-	self.mag_array = mag_array
-	
-	for dec in self.dec_array:
-	    for mag in self.mag_array:
-		self.flag['atomoxetine_dec'] = dec
-		self.flag['atomoxetine_mag'] = mag
-		self.tags.append(str(dec) + '_' + str(mag))
-		self.flag['tag'] = '_' + self.tags[-1]
-		self.flags.append(copy(self.flag))
-
-    def analyze(self):
-	atomox_SSRT = np.empty((len(self.dec_array), len(self.mag_array)))
-
-	# Create array with SSRTs
-	for i,dec in enumerate(self.dec_array):
-	    for j,mag in enumerate(self.mag_array):
-		atomox_SSRT[i,j] = np.mean(self.SSRT[str(dec) + '_' + str(mag)])
-		#data = self.data[str(dec) + '_' + str(mag)]
-		#data_gp, data_gp_idx = emergent.group_batch(data, self.data_idx, ['SS_presented'])
-		#idx = np.where(data_gp[:,data_gp_idx['SS_presented']] == 1)
-		#atomox_SSRT[i,j] = data_gp[idx, data_gp_idx['SSD_mean_mean']]
-
-	# Create meshgrid for displaying
-	X, Y = np.meshgrid(self.dec_array, self.mag_array)
-
-	self.new_fig()
-	plt.contourf(X, Y, atomox_SSRT)
-	plt.title('Atomoxetine effects on StopSignal Reaction Time (SSRT)')
-	plt.xlabel('NE burst decrease speed')
-	plt.ylabel('NE burst magnitude')
-	plt.xlim((0,0.1))
-	plt.ylim((0,1))
-	plt.colorbar()
-
-	self.save_plot("2D-SSRT")
-
 @pools.register_group(['stopsignal', 'salience'])
 class Salience(StopSignalBase):
     def __init__(self, detection_probs=None, **kwargs):
@@ -353,7 +295,7 @@ class Salience(StopSignalBase):
 	self.tags = []
 
 	if detection_probs is None:
-	    self.detection_probs = np.linspace(0,1,11)
+	    self.detection_probs = np.linspace(0,1,3)
 	else:
 	    self.detection_probs = detection_probs
 
@@ -383,7 +325,7 @@ class Salience(StopSignalBase):
 	    
 @pools.register_group(['stopsignal'])
 class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,0.05,0.1,.15,.2), **kwargs):
+    def __init__(self, IFG_lesions=(0.,.2), **kwargs):
 	super(StopSignal_IFGlesion, self).__init__(**kwargs)
 	self.tags = []
 	self.IFGs = []
@@ -599,11 +541,11 @@ class MotivationalEffects(StopSignalBase):
 
 @pools.register_group(['stopsignal', 'ifg_lesion'])
 class IFGLesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0,0.1,0.2,0.3), **kwargs):
+    def __init__(self, IFG_lesions=(0,0.3), **kwargs):
 	super(IFGLesion, self).__init__(**kwargs)
 	self.flag['test_SSD_mode'] = True
-        self.flag['SSD_start'] = 30
-        self.flag['SSD_stop'] = 120
+        self.flag['SSD_start'] = 0
+        self.flag['SSD_stop'] = 40
 	#self.flag['SS_prob'] = 1.
 	self.tags = []
 	self.names = []

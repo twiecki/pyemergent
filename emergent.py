@@ -151,9 +151,9 @@ class Base(object):
         from pylab import savefig
 	savefig(self.plot_prefix_png + name + ".png")
 	savefig(self.plot_prefix_eps + name + ".eps")
-	savefig(self.plot_prefix_pdf + name + ".pdf")
+	#savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_hddm(self, depends_on=None, plot=True, **kwargs):
+    def fit_hddm(self, depends_on=None, plot=False, **kwargs):
         import hddm
         # Remove outliers
         #self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
@@ -490,9 +490,10 @@ def main():
     log_dir = None
     ssh = False
     run = False
-    
+    groups = None
+
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'wmn:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
+        opts, args = getopt.getopt(sys.argv[1:], 'wmn:g:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'group', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
@@ -504,6 +505,12 @@ def main():
             mpi=True
         elif o in ('-n', '--nodes'):
             nodes = int(a)
+        elif o in ('-g', '--group'):
+            groups = a.split(',')
+#            if groups is None:
+#                groups = [a]
+#            else:
+#                groups.append(a)
         elif o in ('-r', '--run'):
             run = True
         elif o in ('-a', '--analyze'):
@@ -527,22 +534,22 @@ def main():
         pool = pools.PoolMPI(emergent_exe=emergent, prefix=prefix)
 
     elif ssh:
-        hosts = ['smp00%i'%i for i in range(3,10) if i!=5]
+        hosts = ['smp00%i'%i for i in range(7,10)]
         hosts_dict = {}
         for host in hosts:
-            hosts_dict[host] = 16
+            hosts_dict[host] = 32
         pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
         
     if master:
         if prefix is None:
             print "Please provide the prefix directory"
             sys.exit(2)
-        write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir)
+        write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir, batches=2)
 
     elif mpi:
-        pool.start_jobs(run=run, analyze=analyze, batches=16) #log_dir_abs=log_dir)
+        pool.start_jobs(run=run, analyze=analyze, batches=2) #log_dir_abs=log_dir)
     elif ssh:
-        pool.run(run=run, analyze=analyze)
+        pool.run(run=run, analyze=analyze, groups=groups, batches=2)
 
 if __name__ == '__main__':
     import doctest

@@ -14,7 +14,6 @@ try:
     pbar = True
 except:
     pbar = False
-    pass
 
 try:
     import matplotlib.pyplot as plt
@@ -89,6 +88,7 @@ class Pool(object):
     def _instantiate(self, **kwargs):
         """Instantiate selected models (select via select())."""
         assert len(self.selected_models) != 0, "No models selected."
+        print self.selected_models
         for model in self.selected_models:
             self.instantiated_models.append(model(prefix=self.prefix, **kwargs))
             self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
@@ -390,6 +390,8 @@ class PoolSSH(Pool):
 
     def worker(self, host, silent, emergent_exe):
         from Queue import Empty, Full
+        import signal
+        signal.siginterrupt(4, False)
         
         if host != 'local':
             command = ['ssh', host]
@@ -400,9 +402,8 @@ class PoolSSH(Pool):
             while(True):
                 try:
                     flag = self.queue.get(timeout=20)
-                except Empty:
-                    flag = self.queue.get(timeout=10)
-
+                except IOError:
+                    continue
                 call_emergent(dict_to_list(flag), prefix=command, silent=silent, emergent_exe=emergent_exe)
                 # Done
                 self.queue.task_done()
@@ -434,7 +435,10 @@ class PoolSSH(Pool):
 
         try:
             while(True):
-                recv = self.queue_anal.get(timeout=20)
+                try:
+                    recv = self.queue_anal.get(timeout=20)
+                except IOError:
+                    continue
                 model = self.instantiated_models_dict[recv]
                 model.load_logs()
                 model.preprocess_data()
@@ -443,15 +447,10 @@ class PoolSSH(Pool):
                 self.queue_anal.task_done()
                 
                 if pbar:
-                    self.pbar.update(self.queue_output.qsize())
+                    self.pbar.update(3)
 
         except Empty:
             pass
-
-        
-
-        
-
 
 class RegisteredModels(object):
     def __init__(self):
@@ -516,13 +515,13 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
 
     return model
 
-@retry(3)
+@retry(2)
 def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emergent_exe=None):
     """Call emergent with the provided flags(list).
     A prefix can be provided which will be inserted before emergent."""
     import os
 
-    if mpi:
+    #if mpi:
         #emergent_call = ['/gpfs/home/wiecki/BG_inhib/pyemergent/call_emergent.sh','-nogui','-ni','-p'] + flags
         # Using the older os.system() here because subprocess leads to
         # python segfaults when running on multiple nodes. No idea why.
@@ -530,12 +529,12 @@ def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emer
         #print "Calling %s" % ' '.join(emergent_call)
         #ret_val = os.system(' '.join(emergent_call))
         #print "os.system return value: %i" % ret_val
-        from mpi4py import MPI
-        print "Launching job"
-        comm = MPI.COMM_SELF.Spawn('emergent',
-                                   args=['-nogui','-ni','-p'] + flags)
-        print "Finished? Disconnecting."
-        comm.Disconnect()
+        #from mpi4py import MPI
+        #print "Launching job"
+        #comm = MPI.COMM_SELF.Spawn('emergent',
+        #                           args=['-nogui','-ni','-p'] + flags)
+        #print "Finished? Disconnecting."
+        #comm.Disconnect()
         
 
 
@@ -562,5 +561,8 @@ def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emer
         print(" ".join(emergent_call))
         retcode = subprocess.call(emergent_call)
 
-    print retcode
+    if retcode != 0:
+        print retcode
+        print prefix
+        
     return (retcode == 0)
