@@ -640,20 +640,20 @@ class SaccadeDDMBase(Saccade):
         self.new_fig()
         plt.plot(self.x, values, 'o')
         
-@pools.register_group(['saccade', 'DDM', 'DLPFC', 'nocycle', 'mean'])
+@pools.register_group(['DDM', 'DLPFC', 'nocycle', 'mean'])
 class SaccadeDDMDLPFC_mean(SaccadeDDMBase):
     def __init__(self, start=-0.05, stop=0.05, samples=5, **kwargs):
         super(SaccadeDDMDLPFC_mean, self).__init__(**kwargs)
         self.set_flags_condition('DLPFC_speed_mean_mod', start, stop, samples)
 
 
-@pools.register_group(['saccade', 'DDM', 'STN'])
+@pools.register_group(['DDM', 'STN'])
 class SaccadeDDMSTN(SaccadeDDMBase):
     def __init__(self, start=0.0, stop=1., samples=5, **kwargs):
         super(self.__class__, self).__init__(**kwargs)
         self.set_flags_condition('STN_lesion', start, stop, samples)
 
-@pools.register_group(['saccade', 'DDM', 'speed_acc'])
+@pools.register_group(['DDM', 'speed_acc'])
 class SaccadeDDMSpeedAcc(SaccadeDDMBase):
     def __init__(self, **kwargs):
         super(SaccadeDDMSpeedAcc, self).__init__(**kwargs)
@@ -676,7 +676,7 @@ class SaccadeDDMThalam(SaccadeDDMBase):
         super(SaccadeDDMThalam, self).__init__(**kwargs)
         self.set_flags_condition('thalam_thresh', start, stop, samples)
 
-@pools.register_group(['saccade', 'DDM', 'DA', 'nocycle'])
+@pools.register_group(['DDM', 'DA', 'nocycle'])
 class SaccadeDDMDA(SaccadeDDMBase):
     def __init__(self, start=0.027, stop=0.032, samples=10, **kwargs):
         super(SaccadeDDMDA, self).__init__(**kwargs)
@@ -685,25 +685,25 @@ class SaccadeDDMDA(SaccadeDDMBase):
             flag['SZ_mode'] = True
             #flag['thalam_thresh'] = 0.7
 
-@pools.register_group(['saccade', 'DDM', 'prepotent', 'striatum', 'nocycle'])
+@pools.register_group(['DDM', 'prepotent', 'striatum', 'nocycle'])
 class SaccadeDDMPrepotentStriatum(SaccadeDDMBase):
     def __init__(self, start=-.3, stop=.6, samples=6, **kwargs):
         super(SaccadeDDMPrepotentStriatum, self).__init__(**kwargs)
         self.set_flags_condition('prepotent_bias', start, stop, samples)
 
-@pools.register_group(['saccade', 'DDM', 'prepotent', 'PFC', 'nocycle'])
+@pools.register_group(['DDM', 'prepotent', 'PFC', 'nocycle'])
 class SaccadeDDMPrepotentPFC(SaccadeDDMBase):
     def __init__(self, start=-.2, stop=.2, samples=5, **kwargs):
         super(SaccadeDDMPrepotentPFC, self).__init__(**kwargs)
         self.set_flags_condition('prepotent_bias_pfc', start, stop, samples)
 
-@pools.register_group(['saccade', 'DDM', 'prepotent', 'PFC+striatum', 'nocycle'])
+@pools.register_group(['DDM', 'prepotent', 'PFC+striatum', 'nocycle'])
 class SaccadeDDMPrepotent(SaccadeDDMBase):
     def __init__(self, start=-.2, stop=.2, samples=5, **kwargs):
         super(SaccadeDDMPrepotent, self).__init__(**kwargs)
         self.set_flags_condition(['prepotent_bias_pfc', 'prepotent_bias'], start, stop, samples, tag='prepotent_both')
 
-@pools.register_group(['saccade', 'DDM', 'preSMA'])
+@pools.register_group(['DDM', 'preSMA'])
 class SaccadeDDMpreSMA(SaccadeDDMBase):
     def __init__(self, start=-.2, stop=.2, samples=5, **kwargs):
         super(SaccadeDDMpreSMA, self).__init__(**kwargs)

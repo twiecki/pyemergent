@@ -538,6 +538,7 @@ def main():
         hosts_dict = {}
         for host in hosts:
             hosts_dict[host] = 32
+	hosts_dict = {'theta':8, 'darpp32':4, 'drd2':4, 'bike':2, 'cycle':2, 'ski':2}
         pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
         
     if master:
