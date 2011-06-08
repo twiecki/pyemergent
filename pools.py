@@ -142,6 +142,7 @@ class PoolMPI(Pool):
 
     def start_jobs(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
+        print MPI.Query_thread()
 
         # Put all jobs in the queue
         self.select()
@@ -156,6 +157,7 @@ class PoolMPI(Pool):
     # MPI function for usage on cluster
     def mpi_controller(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
+        print MPI.Query_thread()
         
         process_list = range(1, MPI.COMM_WORLD.Get_size())
         rank = MPI.COMM_WORLD.Get_rank()
@@ -249,6 +251,8 @@ class PoolMPI(Pool):
             print "Failed to import matplotlib"
 
         from mpi4py import MPI
+        print MPI.Query_thread()
+        
         rank = MPI.COMM_WORLD.Get_rank()
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()

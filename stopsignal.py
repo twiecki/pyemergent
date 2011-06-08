@@ -260,7 +260,7 @@ class Norepinephrine(StopSignalBase):
         self.new_fig()
         self.plot_staircase()
 
-@pools.register_group(['stopsignal', 'NE', 'nostaircase'])
+#@pools.register_group(['stopsignal', 'NE', 'nostaircase'])
 class NorepinephrineNoStair(StopSignalBase):
     def __init__(self, **kwargs):
         super(NorepinephrineNoStair, self).__init__(**kwargs)
@@ -816,7 +816,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 
 
 
-@pools.register_group(['stopsignal', 'DDM'])
+#@pools.register_group(['stopsignal', 'DDM'])
 class StopSignalDDM(StopSignalBase):
     def __init__(self, **kwargs):
 	super(StopSignalDDM, self).__init__(**kwargs)

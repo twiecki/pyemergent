@@ -94,7 +94,7 @@ class Saccade(emergent.Base):
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 	    self.flags[-1]['tonic_DA_intact'] = 0.029
-	    self.flags[-1]['STN_lesion'] = .5
+	    self.flags[-1]['STN_lesion'] = .8
 
         if motivation:
             self.flags.append(copy(self.flag))
@@ -125,8 +125,8 @@ class Saccade(emergent.Base):
 	self.flags.append(copy(self.flag))
 
     def analyze(self):
-	self.plot_RT_histogram()
-	#self.save_plot("RT_histo")
+	self.plot_RT_histo()
+	self.save_plot("RT_histo")
 
         self.new_fig()
         self.plot_RT()
@@ -138,7 +138,7 @@ class Saccade(emergent.Base):
 
         self.new_fig()
         self.plot_error(inhibited_as_error=False)
-        #self.save_plot("error")
+        self.save_plot("error_no_inhib")
         
         #self.new_fig()
         #self.plot_preSMA_act()
@@ -299,7 +299,7 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
             
 
-    def plot_RT_histogram(self, bins=75, range=(0,200), save=True, grid=True, cutoff=None, saccade=None):
+    def plot_RT_histo(self, bins=75, range=(0,200), save=True, grid=True, cutoff=None, saccade=None):
         if saccade is None:
             saccade = '"Antisaccade"'
         elif saccade == 'anti':
@@ -357,9 +357,6 @@ class Saccade(emergent.Base):
             else:
                 plt.title(tag)
 
-        if save:
-            self.save_plot('RT_histogram_%s'%tag)
-
     def plot_block_influence(self, error=False, IFG_act=False, SPE=False):
 	"""Plot trial number of block against error (if IFG_act is false)
 	or against IFG_act (if True)
@@ -415,6 +412,11 @@ class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
 	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, max_epoch=50, **kwargs)
 
+#@pools.register_group(['saccade', 'pretrial', 'nocycle'])
+class Saccade_pretrial_simple(Saccade):
+    def __init__(self, **kwargs):
+	super(Saccade_pretrial_simple, self).__init__(pre_trial_cue=True, max_epoch=100, **kwargs)
+        
 @pools.register_group(['flanker', 'pretrial', 'nocycle'])
 class Flanker_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
@@ -507,8 +509,8 @@ class SaccadeDDMBase(Saccade):
 
     def analyze(self):
         if self.plot:
-            self.plot_RT_histogram()#(cutoff=50)
-            #self.save_plot('RT_histogram')
+            self.plot_RT_histo()#(cutoff=50)
+            self.save_plot('RT_histo')
             #self.plot_RT_histogram(saccade='pro')#(cutoff=50)
             #self.save_plot('RT_histogram_pro')
 
@@ -768,7 +770,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	#self.analyse_preSMA_act_anti_pro()
 	#self.save_plot("preSMA_act_pro_anti")
 
-    def plot_RT_histogram(self, bins=75, range=(0,200), save=False, grid=True, cutoff=None, saccade=None):
+    def plot_RT_histo(self, bins=75, range=(0,200), save=False, grid=True, cutoff=None, saccade=None):
         if saccade is None:
             saccade = '"Antisaccade"'
         elif saccade == 'anti':
@@ -792,7 +794,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	    plt.hold(True)
 
 	    # Correct
-	    data=self.data['trl'][tag]
+	    data = self.data['trl'][tag]
             if cutoff is not None:
                 idx = (data['trial_name'] == saccade) & (data['error'] == 0.0) & (data['inhibited'] == 0) & (data['minus_cycles'] > cutoff)
             else:
@@ -827,9 +829,6 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             else:
                 plt.title(tag)
 
-        if save:
-            self.save_plot('RT_histogram_%s'%tag)
-            
     def analyse_AS_correct_error(self, column, wind, cycle=None, center=None, tag=None):
         if tag is None:
             tag = 'intact'
@@ -1088,8 +1087,8 @@ class FlankerCycle(SaccadeBaseCycle):
         super(FlankerCycle, self).__init__(task='FLANKER', **kwargs)
 
     def analyze(self):
-        self.plot_RT_histogram()
-	#self.save_plot("RT_histo")
+        self.plot_RT_histo()
+	self.save_plot("RT_histo")
         
 	self.new_fig()
 	self.analyse_preSMA_act()

@@ -27,7 +27,7 @@ def sem(x, axis=0):
     return s
 
 class Base(object):
-    def __init__(self, proj_name=None, batches=8, prefix=None, log_dir=None, log_dir_abs=None, debug=False, plot=True):
+    def __init__(self, proj_name=None, batches=8, prefix=None, log_dir=None, log_dir_abs=None, debug=None, plot=True):
 	if proj_name is None:
 	    #proj_name = 'BG_response_inhib_preSMA_inhib_fixation'
 	    #proj_name = 'BG_IFG_striatum_split_salience4'
@@ -43,7 +43,7 @@ class Base(object):
         self.plot = plot
 	self.flags = []
         self.lw = 2.
-        self.debug = debug
+
 	#self.log_dir_emergent = os.path.join('logs', self.__class__.__name__)
         if log_dir is None:
             self.log_dir = os.path.join(self.prefix, 'logs', self.__class__.__name__)
@@ -63,12 +63,17 @@ class Base(object):
         self.flag = {'proj': self.prefix+self.proj + '.proj',
 		     'log_dir': self.log_dir,
 		     'batches': 1,
-                     'debug': debug,
                      'SZ_mode': 'false',
                      'rnd_init': 'NEW_SEED',
                      'LC_mode': 'phasic',
                      'motivational_bias': 'NO_BIAS'}
 
+        if debug is not None:
+            self.flag['debug'] = debug
+            self.debug = debug
+        else:
+            self.debug = False
+            
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
             try:
@@ -491,9 +496,10 @@ def main():
     ssh = False
     run = False
     groups = None
+    batches = 4
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'wmn:g:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'group', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
+        opts, args = getopt.getopt(sys.argv[1:], 'wmn:g:b:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'group', 'batches', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
@@ -523,6 +529,8 @@ def main():
             log_dir = a
         elif o in ('-s', '--ssh'):
             ssh = True
+        elif o in ('-b', '--batches'):
+            batches = int(a)
         elif o in ('-h', '--help'):
             usage()
 
@@ -538,19 +546,20 @@ def main():
         hosts_dict = {}
         for host in hosts:
             hosts_dict[host] = 32
-	hosts_dict = {'theta':8, 'darpp32':4, 'drd2':4, 'bike':2, 'cycle':2, 'ski':2}
-        pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
+	hosts_dict = {'theta':3, 'darpp32':2, 'drd2':2, 'bike':2, 'cycle':1, 'ski':2}
+        #hosts_dict = {'cycle':2}
+	pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
         
     if master:
         if prefix is None:
             print "Please provide the prefix directory"
             sys.exit(2)
-        write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir, batches=2)
+        write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir, batches=batches)
 
     elif mpi:
-        pool.start_jobs(run=run, analyze=analyze, batches=2) #log_dir_abs=log_dir)
+        pool.start_jobs(run=run, analyze=analyze, batches=batches) #log_dir_abs=log_dir)
     elif ssh:
-        pool.run(run=run, analyze=analyze, groups=groups, batches=2)
+        pool.run(run=run, analyze=analyze, groups=groups, batches=batches)
 
 if __name__ == '__main__':
     import doctest
