@@ -1,15 +1,17 @@
 from __future__ import with_statement
-import os
+import matplotlib
+matplotlib.use('Agg')
 
-try:
-    import matplotlib.pyplot as plt
-except:
-    print "Could not load pyplot"
+#try:
+#    import matplotlib
+#    matplotlib.use('Agg')
+    #import matplotlib.pyplot as plt
+#except:
+#    print "Could not load pyplot"
 
 import numpy as np
-import sys
+import sys, os
 
-#import hhm
 from math import ceil
 from copy import copy
 
@@ -160,30 +162,21 @@ class Base(object):
 
     def fit_hddm(self, depends_on=None, plot=False, **kwargs):
         import hddm
+        import pymc as pm
         # Remove outliers
         #self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
 
-        model = hddm.HDDM(self.hddm_data, depends_on=depends_on, is_subj_model=True, no_bias=False, init=False, **kwargs)
-        model._param_factory.param_ranges['t_upper'] = 2.
-        model.mcmc(samples=4000, burn=2000)
+        model = hddm.HDDMAntisaccade(self.hddm_data[self.hddm_data['instruct']==1], depends_on=depends_on, is_group_model=False, no_bias=True, init=False, **kwargs)
+        #mc = pm.MCMC(model.create())
+        map_ = pm.MAP(model.create())
+        map_.fit()
 
         if plot:
             #self.new_fig()
             hddm.utils.plot_rt_fit(model)
             self.save_plot('DDM_fits')
 
-        return model
-
-    def fit_hlba(self, depends_on, plot=False, **kwargs):
-        import hddm
-        model = hddm.HDDM(self.hddm_data, model_type='LBA', depends_on=depends_on, is_subj_model=True, no_bias=False, **kwargs)
-        model.mcmc()
-
-        if plot:
-            raise NotImplementedError, "TODO"
-
-        return model
-    
+        return map_
 
 class BaseCycle(Base):
     def __init__(self, **kwargs):
@@ -557,7 +550,7 @@ def main():
         write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir, batches=batches)
 
     elif mpi:
-        pool.start_jobs(run=run, analyze=analyze, batches=batches) #log_dir_abs=log_dir)
+        pool.start_jobs(run=run, groups=groups, analyze=analyze, batches=batches) #log_dir_abs=log_dir)
     elif ssh:
         pool.run(run=run, analyze=analyze, groups=groups, batches=batches)
 

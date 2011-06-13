@@ -16,6 +16,8 @@ except:
     pbar = False
 
 try:
+    import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 except:
     print "Could not load pyplot"
@@ -67,6 +69,14 @@ def retry(tries, delay=3, backoff=2):
     return f_retry # true decorator -> decorated function
   return deco_retry  # @retry(arg[, ...]) -> true decorator
 
+
+def analyze_locally(groups=None, batches=8):
+    p = Pool()
+    p.select(groups)
+    p._instantiate(batches=batches)
+    p.analyze()
+
+    
 class Pool(object):
     def __init__(self, prefix=None, emergent_exe=None, silent=False, analyze=True):
         self.instantiated_models = []
@@ -140,12 +150,12 @@ class PoolMPI(Pool):
         """Put one job in the queue to be processed"""
         self.queue.append(item)
 
-    def start_jobs(self, run=True, analyze=True, **kwargs):
+    def start_jobs(self, run=True, analyze=True, groups=None, **kwargs):
         from mpi4py import MPI
         print MPI.Query_thread()
 
         # Put all jobs in the queue
-        self.select()
+        self.select(groups=groups)
         self.prepare(**kwargs)
 
         rank = MPI.COMM_WORLD.Get_rank()
@@ -549,7 +559,7 @@ def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emer
 
     # Is there an alternate emergent executable defined? (e.g. when running on a cluster)
     if emergent_exe is None:
-        emergent_call = prefix + ['emergent','-nogui','-ni','-p'] + flags
+        emergent_call = prefix + ['/usr/bin/emergent','-nogui','-ni','-p'] + flags
     else:
         emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
 
