@@ -562,9 +562,10 @@ class SaccadeDDMBase(Saccade):
         import hddm
         x = np.linspace(range_[0], range_[1], 200)
         test_params = ('v', 'v_switch', 'a', 't_switch')
-        params = ('v', 'v_switch', 'a', 't_switch', 't')
+        params = ('v', 'v_switch', 'a', 't_switch', 't', 'V_switch')
         # Plot parameters
         for i,test_param in enumerate(test_params):
+            print test_param
             plt.figure()
             for j, dep_val in enumerate(self.x):
                 param_vals = {}
@@ -586,8 +587,12 @@ class SaccadeDDMBase(Saccade):
                         param_vals[param] = fitted_params[tag+'_root'].value
                     else:
                         param_vals[param] = fitted_params[param+'_root'].value
+                
+                print tag
+                for name, param in sorted(param_vals.items()):
+                    print "%s: %f"%(name, param)
 
-                fit = hddm.likelihoods.wfpt_switch.pdf(x, param_vals['v'], param_vals['v_switch'], param_vals['a'], .5, param_vals['t'], param_vals['t_switch'])
+                fit = hddm.likelihoods.wfpt_switch.pdf(x, param_vals['v'], param_vals['v_switch'], param_vals['V_switch'], param_vals['a'], .5, param_vals['t'], param_vals['t_switch'])
                 plt.plot(x, fit)
                 
                 plt.title(tag)
@@ -619,7 +624,7 @@ class SaccadeDDMBase(Saccade):
         plt.subplot(211)
         plt.plot([self.hddm_models[test_param].logp for test_param in test_params], lw=self.lw)
         plt.ylabel('logp')
-        plt.xticks(np.arange(5), ['threshold', 'bias', 'drift'])
+        plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
         if self.hddm_models.has_key('none'):
             plt.axhline(self.hddm_models['none'].logp)
         plt.title('HDDM model fits for different varying parameters')
@@ -627,7 +632,7 @@ class SaccadeDDMBase(Saccade):
         plt.subplot(212)
         plt.plot([self.hddm_models[test_param].BIC for test_param in test_params], lw=self.lw)
         plt.ylabel('BIC')
-        plt.xticks(np.arange(5), ['threshold', 'bias', 'drift'])
+        plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
         if self.hddm_models.has_key('none'):
             plt.axhline(self.hddm_models['none'].BIC)
         plt.title('HDDM model fits for different varying parameters')
@@ -711,7 +716,7 @@ class SaccadeDDMThalam(SaccadeDDMBase):
 
 @pools.register_group(['DDM', 'DA', 'nocycle'])
 class SaccadeDDMDA(SaccadeDDMBase):
-    def __init__(self, start=0.027, stop=0.032, samples=10, **kwargs):
+    def __init__(self, start=0.027, stop=0.032, samples=6, **kwargs):
         super(SaccadeDDMDA, self).__init__(**kwargs)
         self.set_flags_condition('tonic_DA_SZ', start, stop, samples)
         for flag in self.flags:

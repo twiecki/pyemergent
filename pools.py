@@ -10,12 +10,6 @@ from glob import glob
 from math import ceil
 
 try:
-    import progressbar
-    pbar = True
-except:
-    pbar = False
-
-try:
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -78,14 +72,15 @@ def analyze_locally(groups=None, batches=8):
 
     
 class Pool(object):
-    def __init__(self, prefix=None, emergent_exe=None, silent=False, analyze=True):
+    def __init__(self, prefix=None, emergent_exe=None, silent=False, analyze=True, debug=False):
         self.instantiated_models = []
         self.instantiated_models_dict = {}
         self.selected_models = set()
         self.emergent_exe = emergent_exe
         self.silent = silent
         self.prefix = prefix
-        
+        self.debug = debug
+
     def queue_jobs(self):
         """Put jobs in the queue to be processed"""
         assert len(self.instantiated_models) != 0, "Insantiate models first by calling _instantiate()"
@@ -98,7 +93,6 @@ class Pool(object):
     def _instantiate(self, **kwargs):
         """Instantiate selected models (select via select())."""
         assert len(self.selected_models) != 0, "No models selected."
-        print self.selected_models
         for model in self.selected_models:
             self.instantiated_models.append(model(prefix=self.prefix, **kwargs))
             self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
@@ -152,7 +146,6 @@ class PoolMPI(Pool):
 
     def start_jobs(self, run=True, analyze=True, groups=None, **kwargs):
         from mpi4py import MPI
-        print MPI.Query_thread()
 
         # Put all jobs in the queue
         self.select(groups=groups)
@@ -167,65 +160,83 @@ class PoolMPI(Pool):
     # MPI function for usage on cluster
     def mpi_controller(self, run=True, analyze=True, **kwargs):
         from mpi4py import MPI
-        print MPI.Query_thread()
         
         process_list = range(1, MPI.COMM_WORLD.Get_size())
         rank = MPI.COMM_WORLD.Get_rank()
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
+        
+        if self.debug:
+            print "Controller %i on %s: ready!" % (rank, proc_name)
 
-        print "Controller %i on %s: ready!" % (rank, proc_name)
+        import progressbar
+        self.pbar = progressbar.ProgressBar().start()
 
+        counter=0
         if run and analyze:
             raise ValueError('Either run or analyze can be true. Call this function twice.')
 
         if run:
-            print self.queue
+            if self.debug:
+                print self.queue
             workers_done = []
             queue = iter(self.queue)
+            self.pbar.maxval = len(self.queue)
             # Feed all queued jobs to the childs
             while(True):
                 # Create iterator
                 status = MPI.Status()
                 recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-                print "Controller: received tag %i from %s" % (status.tag, status.source)
+                if self.debug:
+                    print "Controller: received tag %i from %s" % (status.tag, status.source)
                 if status.tag == 10:
                     try:
                         task = queue.next()
+                        self.pbar.update(counter)
+                        counter+=1
                         # Send job to worker
-                        print "Controller: Sending task"
+                        if self.debug:
+                            print "Controller: Sending task"
                         MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
 
                     except StopIteration:
                         # Task queue is empty
-                        print "Controller: Task queue is empty"
+                        if self.debug:
+                            print "Controller: Task queue is empty"
                         if analyze:
                             workers_done.append(status.source)
-                            print workers_done
+                            if self.debug:
+                                print workers_done
                             if len(workers_done) == len(process_list):
                                 break
                             else:
                                 continue
                         else:
-                            print "Controller: Sending kill signal"
+                            if self.debug:
+                                print "Controller: Sending kill signal"
                             MPI.COMM_WORLD.send([], dest=status.source, tag=2)
                         
 
                 elif status.tag == 2: # Exit
                     process_list.remove(status.source)
-                    print 'Process %i exited' % status.source
-                    print 'Processes left: ' + str(process_list)
+                    if self.debug:
+                        print 'Process %i exited' % status.source
+                        print 'Processes left: ' + str(process_list)
                 else:
                     print 'Unkown tag %i with msg %s' % (status.tag, str(data))
 
                 if len(process_list) == 0:
-                    print "No processes left"
+                    self.pbar.finish()
+                    if self.debug:
+                        print "No processes left"
                     break
 
         # All jobs finished, analyze.
         if analyze:
-            print "Controller: Analyzing jobs"
+            if self.debug:
+                print "Controller: Analyzing jobs"
             iter_models = self.instantiated_models_dict.iterkeys()
+            self.pbar.maxval = len(self.instantiated_models_dict)
             while(True):
                 status = MPI.Status()
                 recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
@@ -234,6 +245,8 @@ class PoolMPI(Pool):
                     try:
                         # Get model
                         task = iter_models.next()
+                        self.pbar.update(counter)
+                        counter+=1
                     except StopIteration:
                         # Empty, send kill signal (coded as tag 2)
                         MPI.COMM_WORLD.send([], dest=status.source, tag=2)
@@ -242,13 +255,16 @@ class PoolMPI(Pool):
 
                 elif status.tag == 2: # Exit
                     process_list.remove(status.source)
-                    print 'Process %i exited' % status.source
-                    print 'Processes left: ' + str(process_list)
+                    if self.debug:
+                        print 'Process %i exited' % status.source
+                        print 'Processes left: ' + str(process_list)
                 else:
                     print 'Unkown tag %i with msg %s' % (status.tag, str(recv))
 
                 if len(process_list) == 0:
-                    print "No processes left"
+                    if self.debug:
+                        print "No processes left"
+                    self.pbar.finish()
                     break
 
         return False
@@ -261,37 +277,41 @@ class PoolMPI(Pool):
             print "Failed to import matplotlib"
 
         from mpi4py import MPI
-        print MPI.Query_thread()
         
         rank = MPI.COMM_WORLD.Get_rank()
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
-        
-        print "Worker %i on %s: ready!" % (rank, proc_name)
+        if self.debug:
+            print "Worker %i on %s: ready!" % (rank, proc_name)
         # Send ready
         MPI.COMM_WORLD.send([{'rank':rank, 'name':proc_name}], dest=0, tag=10)
 
         # Start main data loop
         while True:
             # Get some data
-            print "Worker %i on %s: waiting for data" % (rank, proc_name)
+            if self.debug:
+                print "Worker %i on %s: waiting for data" % (rank, proc_name)
             recv = MPI.COMM_WORLD.recv(source=0, tag=MPI.ANY_TAG, status=status)
-            print "Worker %i on %s: received data, tag: %i" % (rank, proc_name, status.tag)
+            if self.debug:
+                print "Worker %i on %s: received data, tag: %i" % (rank, proc_name, status.tag)
             
             if status.tag == 2:
-                print "Worker %i on %s: recieved kill signal" % (rank, proc_name)
+                if self.debug:
+                    print "Worker %i on %s: recieved kill signal" % (rank, proc_name)
                 MPI.COMM_WORLD.send([], dest=0, tag=2)
                 return
 
             if status.tag == 10:
                 # Run emergent
-                print "Worker %i on %s: Calling emergent: %s" % (rank, proc_name, recv)
+                if self.debug:
+                    print "Worker %i on %s: Calling emergent: %s" % (rank, proc_name, recv)
                 #recv['debug'] = True
-                call_emergent(dict_to_list(recv), mpi=True, emergent_exe=self.emergent_exe, prefix=self.prefix)
+                call_emergent(dict_to_list(recv), silent=not(self.debug), emergent_exe=self.emergent_exe, prefix=self.prefix)
 
             elif status.tag == 11:
                 # Analyze model
-                print "Worker %i on %s: Analyzing model %s" % (rank, proc_name, recv)
+                if self.debug:
+                    print "Worker %i on %s: Analyzing model %s" % (rank, proc_name, recv)
                 try:
                     model = self.instantiated_models_dict[recv]
                     model.load_logs()
@@ -301,8 +321,8 @@ class PoolMPI(Pool):
                     # Only log the error, but keep on processing jobs
                     sys.stderr.write("Worker %i on %s: ERROR: %s" % (rank, proc_name, str(err)))
                     
-
-            print("Worker %i on %s: finished one job" % (rank, proc_name))
+            if self.debug:
+                print("Worker %i on %s: finished one job" % (rank, proc_name))
             MPI.COMM_WORLD.send([], dest=0, tag=10)
     
         MPI.COMM_WORLD.send([], dest=0, tag=2)
@@ -371,7 +391,7 @@ def run_model(model_class, run=True, analyze=True, hosts=None, **kwargs):
     return model
 
 @retry(2)
-def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emergent_exe=None):
+def call_emergent(flags, prefix=None, silent=False, emergent_exe=None):
     """Call emergent with the provided flags(list).
     A prefix can be provided which will be inserted before emergent."""
     import os
@@ -390,8 +410,6 @@ def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emer
         #                           args=['-nogui','-ni','-p'] + flags)
         #print "Finished? Disconnecting."
         #comm.Disconnect()
-        
-
 
     if prefix is None:
         prefix = []
@@ -405,13 +423,9 @@ def call_emergent(flags, prefix=None, silent=False, errors=True, mpi=False, emer
         emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
 
     if silent:
-        if errors:
-            retcode = subprocess.call(emergent_call,
-                                      stdout=open(os.devnull,'w'))
-        else:
-            retcode = subprocess.call(emergent_call,
-                                      stdout=open(os.devnull,'w'),
-                                      stderr=open(os.devnull,'w'))
+        retcode = subprocess.call(emergent_call,
+                                  stdout=open(os.devnull,'w'),
+                                  stderr=open(os.devnull,'w'))
     else:
         print(" ".join(emergent_call))
         retcode = subprocess.call(emergent_call)
