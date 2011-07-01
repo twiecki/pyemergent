@@ -111,22 +111,19 @@ class Pool(object):
         """Check if models are registered and instantiated. If not,
         register and instantiate them."""
         if not groups:
-            groups = registered_models.groups.keys()
-            
-        # Check that all groups exist
-        for group in groups:
-            assert registered_models.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(registered_groups.groups.keys())
-
-        selected_groups = set.intersection(set(registered_models.groups.keys()), set(groups))
+            groups = set(registered_models.groups.keys())
+        else:
+            groups = set(groups)
+            # Check that all groups exist
+            for group in groups:
+                assert registered_models.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(registered_groups.groups.keys())
 
         # Exclude models
-        selected_groups = selected_groups.difference(set(exclude))
+        selected_groups = groups.difference(set(exclude))
 
-        print selected_groups
-
-        # Add models from selected groups
-        for group in selected_groups:
-            for model in registered_models.groups[group]:
+        # Find models that meet the criteria
+        for model, groups in registered_models.registered_models.iteritems():
+            if groups.issuperset(selected_groups):
                 self.selected_models.add(model)
 
 
@@ -311,7 +308,7 @@ class PoolMPI(Pool):
                 # Run emergent
                 if self.debug:
                     print "Worker %i on %s: Calling emergent: %s" % (self.rank, proc_name, recv)
-                #recv['debug'] = True
+                    recv['debug'] = True
                 call_emergent(dict_to_list(recv), silent=not(self.debug), emergent_exe=self.emergent_exe, prefix=self.prefix)
 
             elif status.tag == 11:
@@ -335,19 +332,19 @@ class PoolMPI(Pool):
 
 class RegisteredModels(object):
     def __init__(self):
-        self.registered_models = set()
+        self.registered_models = {}
         self.groups = {}
 
-    def register(self, model):
-        """Register model so that it can be run automatically by
-        calling the pools.run() function."""
-        self.registered_models.add(model)
+    # def register(self):
+    #     """Register model so that it can be run automatically by
+    #     calling the pools.run() function."""
+    #     self.registered_models.add(model)
         
-        return model
+    #     return model
     
     def register_group(self, groups):
         def reg(model):
-            self.register(model)
+            self.registered_models[model] = set(groups)
             
             for group in groups:
                 if not self.groups.has_key(group):
@@ -359,7 +356,7 @@ class RegisteredModels(object):
 
 # Convenience aliases
 registered_models = RegisteredModels()
-register = registered_models.register
+#register = registered_models.register
 register_group = registered_models.register_group
 
 def dict_to_list(dict):

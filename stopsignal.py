@@ -57,10 +57,10 @@ class StopSignalBase(emergent.Base):
 	self.resp_ss_data = {}
 	self.resp_go_data = {}
 
-	self.pt_code = {0: 'GoTrial_resp',
-			1: 'GoTrial_noresp',
-			2: 'SS_inhib',
-			3: 'SS_resp'}
+	self.pt_code = {0: 'Go trial',
+			#1: 'GoTrial_noresp',
+			1: 'SS inhib',
+			2: 'SS resp'}
 
     def _preprocess_data(self, data, tag):
         self.SSRT[tag] = []
@@ -149,13 +149,14 @@ class StopSignalBase(emergent.Base):
 	    # Analyze each individual trial code (i.e. what was the previous trial?)
 	    data_mean, data_sem = emergent.group_batch(self.data_settled[tag], ['prev_trial_code', 'inhibited', 'SS_presented'])
 	    # Select those where a response was made and no stop signal was presented
-	    idx = (data_mean['inhibited'] == 0.0) & (data_mean['SS_presented'] == 0.0)
-	    plt.errorbar(data_mean[idx]['prev_trial_code'], data_mean[idx]['minus_cycles'], color=self.colors[t], yerr=data_sem[idx]['minus_cycles'], label=self.names[t])
+	    idx = (data_mean['inhibited'] == 0.0) & (data_mean['SS_presented'] == 0.0) & ((data_mean['prev_trial_code'] != 1) )
+            #data_mean[idx]['prev_trial_code']
+	    plt.errorbar([0,1,2], data_mean[idx]['minus_cycles'], color=self.colors[t], yerr=data_sem[idx]['minus_cycles'], label=self.names[t], lw=self.lw)
 	    plt.title('RTs depending on previous trial')
 	    plt.xticks(np.arange(len(self.pt_code.values())), self.pt_code.values())
 	    plt.ylabel('RTs')
 	    plt.xlabel('Previous Trial Type')
-	    plt.legend(loc=2)
+	    plt.legend(loc=0)
 	    plt.xlim((-.5, 3.5))
 	    #plt.ylim((60,180))
 
@@ -323,9 +324,9 @@ class Salience(StopSignalBase):
 	self.save_plot('SSRT')
 	    
 	    
-@pools.register_group(['stopsignal'])
+@pools.register_group(['stopsignal', 'seq'])
 class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,.2), **kwargs):
+    def __init__(self, IFG_lesions=(0.,.3), **kwargs):
 	super(StopSignal_IFGlesion, self).__init__(**kwargs)
 	self.tags = []
 	self.IFGs = []
@@ -333,6 +334,7 @@ class StopSignal_IFGlesion(StopSignalBase):
 	
 	self.flag['staircase_mode'] = True
 	self.flag['SS_prob'] = .25
+        self.flag['max_epochs'] = 300
 	
 	for IFG_lesion in IFG_lesions:
 	    self.flag['IFG_lesion'] = IFG_lesion
@@ -631,7 +633,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 	self.resp_go_data = {}
 
         self.SSD_set = 50
-        self.SC_thr = .80
+        self.SC_thr = .85
 
 	self.tags = ['intact'] #, 'fixed_SSD']
         self.flag['task'] = 'STOP_SIGNAL'
@@ -699,7 +701,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
     def analyze_SC_act_avg(self, tag=None):
         if tag is None:
             tag = 'intact'
-        start_cycle = 25
+        start_cycle = 0
 	wind = (0,100)
         #wind = (100,100)
         # From emergent, SC threshold:
