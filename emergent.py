@@ -1,6 +1,5 @@
 from __future__ import with_statement
 import matplotlib
-matplotlib.use('Agg')
 
 #try:
 #    import matplotlib
@@ -160,23 +159,42 @@ class Base(object):
 	savefig(self.plot_prefix_eps + name + ".eps")
 	#savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_hddm(self, depends_on=None, plot=False, **kwargs):
+    def fit_hddm(self, depends_on=None, plot=False, mcmc=False, **kwargs):
         import hddm
         import pymc as pm
         # Remove outliers
-        #self.hddm_data = self.hddm_data[self.hddm_data['rt'] < 50]
+        model = hddm.HDDMAntisaccade(self.hddm_data[self.hddm_data['instruct']==1], depends_on=depends_on, is_group_model=False, no_bias=True, init=False, include=('T',), **kwargs)
+        if mcmc:
+            mc = pm.MCMC(model.create())
+            mc.sample(5000, burn=2000)
+            return mc
+        else:
+            from operator import attrgetter
 
-        model = hddm.HDDMAntisaccade(self.hddm_data[self.hddm_data['instruct']==1], depends_on=depends_on, is_group_model=False, no_bias=True, init=False, **kwargs)
-        #mc = pm.MCMC(model.create())
-        map_ = pm.MAP(model.create())
-        map_.fit()
+            for i in range(10):
+                maps.append(try_fit(model))
 
-        if plot:
-            #self.new_fig()
-            hddm.utils.plot_rt_fit(model)
-            self.save_plot('DDM_fits')
+            maps = sorted(maps, key=attrgetter('logp_at_max'))
+            print [map_.logp_at_max for map_ in maps]
+            #ranges = [(node.parents['lower'], node.parents['upper']) for node in map_.stochastics]
+            #print [node.__name__ for node in map_.stochastics]
+            #print ranges
+            #m = pm.MAP(model.create())
+            #m.fit()
+            #return m
+            #map_.fit(method='brute', ranges=((-2,0), (0,2), (0,0), (1,3), (.5,.5), (0,.5), (0,1.), (0,.5)), verbose=1, Ns=10)#, method='fmin_l_bfgs_b') #, iterlim=10, tol=1e-3)
+            #map_.fit(method='brute', ranges=ranges, verbose=1, Ns=4)#, method='fmin_l_bfgs_b') #, iterlim=10, tol=1e-3)
+            # Return best fitting model
+            return maps[-1]
 
-        return map_
+@pools.retry(4)
+def try_fit(model):
+    try:
+        m = pm.MAP(model.create())
+        m.fit()
+        return m
+    except e:
+        return False
 
 class BaseCycle(Base):
     def __init__(self, **kwargs):
@@ -430,31 +448,6 @@ def gen_testdata():
     new_cols.dtype = dt
     return new_cols
 
-def write_job(nodes, prefix, emergent, set_python_exec=None, log_dir=None, ppn=8):
-    """Write .job file to be ran with qsub."""
-    with open("emergent.job", "w") as f:
-        f.writelines(['#!/bin/bash\n',
-                      '#PBS -N emergent\n',
-                      '#PBS -r n\n',
-                      '#PBS -l nodes='+str(nodes)+':ppn=%i\n'%ppn,
-                      '#PBS -l walltime=04:00:00\n',
-                      'date\n'])
-        
-        #if set_python_exec is not None:
-        #    f.write('source ' +set_python_exec + '\n')
-
-        # Write jobs
-        if log_dir is None:
-            f.write('mpirun -machinefile $PBS_NODEFILE -np '+ str(nodes*ppn) + ' ' + set_python_exec + ' ' + os.path.os.getcwd() + '/emergent.py -m -p '+prefix+' -e '+emergent+'\n')
-            f.write('mpirun -machinefile $PBS_NODEFILE -np '+ str(nodes*ppn) + ' ' + set_python_exec + ' ' + os.path.os.getcwd() + '/emergent.py -a -p '+prefix+' -e '+emergent+'\n')
-        else:
-            f.write('mpirun -machinefile $PBS_NODEFILE -np '+ str(nodes*ppn) + ' ' + set_python_exec + ' ' + os.path.os.getcwd() + '/emergent.py -m -p '+prefix+' -l ' + log_dir +' -e '+emergent+'\n')
-            f.write('mpirun -machinefile $PBS_NODEFILE -np '+ str(nodes*ppn) + ' ' + set_python_exec + ' ' + os.path.os.getcwd() + '/emergent.py -a -p '+prefix+' -l ' + log_dir +' -e '+emergent+'\n')
-
-        f.write('date\n')
-        # Analyze data
-        #f.write('python emergent.py -a -p '+prefix+'\n')
-
 def usage():
     print("""emergent.py
 
@@ -479,31 +472,26 @@ def main():
     import pools
 
     # Set defaults
-    master = False
     mpi = False
     analyze = False
     prefix = None
     emergent = None
     set_python_exec = None
     log_dir = None
-    ssh = False
     run = False
     groups = None
     batches = 4
+    verbose = False
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'wmn:g:b:f:p:e:l:srah', ['write', 'mpi', 'nodes', 'group', 'batches', 'prefix', 'emergent', 'log_dir', 'ssh', 'run', 'analyze', 'help'])
+        opts, args = getopt.getopt(sys.argv[1:], 'mg:b:f:p:e:l:rahv', ['mpi', 'group', 'batches', 'prefix', 'emergent', 'log_dir', 'run', 'analyze', 'help', 'verbose'])
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
 
     for o, a in opts:
-        if o in ('-w', '--write'):
-            master=True
-        elif o in ('-m', '--mpi'):
+        if o in ('-m', '--mpi'):
             mpi=True
-        elif o in ('-n', '--nodes'):
-            nodes = int(a)
         elif o in ('-g', '--group'):
             groups = a.split(',')
 #            if groups is None:
@@ -520,42 +508,31 @@ def main():
             emergent = a
         elif o in ('-l', '--logdir'):
             log_dir = a
-        elif o in ('-s', '--ssh'):
-            ssh = True
         elif o in ('-b', '--batches'):
             batches = int(a)
         elif o in ('-h', '--help'):
             usage()
+        elif o in ('-v', '--verbose'):
+            verbose = True
 
-    # Queue models to find out how many jobs there are
+    # Queue models
     import antisaccade
     import stopsignal
 
     if mpi:
-        pool = pools.PoolMPI(emergent_exe=emergent, prefix=prefix)
-
-    elif ssh:
-        hosts = ['smp00%i'%i for i in range(7,10)]
-        hosts_dict = {}
-        for host in hosts:
-            hosts_dict[host] = 32
-	hosts_dict = {'theta':3, 'darpp32':2, 'drd2':2, 'bike':2, 'cycle':1, 'ski':2}
-        #hosts_dict = {'cycle':2}
-	pool = pools.PoolSSH(emergent_exe=emergent, prefix=prefix, hosts=hosts_dict, silent=False)
-        
-    if master:
-        if prefix is None:
-            print "Please provide the prefix directory"
-            sys.exit(2)
-        write_job(nodes, prefix, emergent, set_python_exec=set_python_exec, log_dir=log_dir, batches=batches)
-
-    elif mpi:
+        pool = pools.PoolMPI(emergent_exe=emergent, prefix=prefix, debug=verbose)
         pool.start_jobs(run=run, groups=groups, analyze=analyze, batches=batches) #log_dir_abs=log_dir)
-    elif ssh:
-        pool.run(run=run, analyze=analyze, groups=groups, batches=batches)
+    else: # Run locally
+        pool = pools.Pool(emergent_exe=emergent, prefix=prefix, debug=verbose)
+        pool.select(groups)
+        pool.prepare(batches=batches)
+        if run:
+            raise NotImplementedError, "Running locally not implemented."
+        else:
+            pool.analyze()
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    #import doctest
+    #doctest.testmod()
     
     main()

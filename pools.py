@@ -11,7 +11,6 @@ from math import ceil
 
 try:
     import matplotlib
-    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 except:
     print "Could not load pyplot"
@@ -72,14 +71,14 @@ def analyze_locally(groups=None, batches=8):
 
     
 class Pool(object):
-    def __init__(self, prefix=None, emergent_exe=None, silent=False, analyze=True, debug=False):
+    def __init__(self, prefix=None, emergent_exe=None, analyze=True, debug=False):
         self.instantiated_models = []
         self.instantiated_models_dict = {}
         self.selected_models = set()
         self.emergent_exe = emergent_exe
-        self.silent = silent
         self.prefix = prefix
         self.debug = debug
+        self.queue = []
 
     def queue_jobs(self):
         """Put jobs in the queue to be processed"""
@@ -88,7 +87,7 @@ class Pool(object):
             split_jobs = model.split_batches()
             # Put jobs in queue
             for job in split_jobs:
-                self.queue_job(job)
+                self.queue.append(job)
 
     def _instantiate(self, **kwargs):
         """Instantiate selected models (select via select())."""
@@ -108,16 +107,11 @@ class Pool(object):
             model.preprocess_data()
             model.analyze()
             
-    def select(self, groups=None, exclude=None):
+    def select(self, groups=None, exclude=()):
         """Check if models are registered and instantiated. If not,
         register and instantiate them."""
         if groups is None:
             groups = registered_models.groups.keys()
-
-        if exclude is None:
-            exclude = set()
-        else:
-            exclude = set(exclude)
             
         # Check that all groups exist
         for group in groups:
@@ -126,7 +120,7 @@ class Pool(object):
         selected_groups = set.intersection(set(registered_models.groups.keys()), set(groups))
 
         # Exclude models
-        #selected_groups = set.discard(self.selected_models, exclude)
+        selected_groups = selected_groups.discard(set(exclude))
 
         # Add models from selected groups
         for group in selected_groups:
@@ -136,14 +130,9 @@ class Pool(object):
 
 class PoolMPI(Pool):
     def __init__(self, **kwargs):
-        self.queue = []
         self.processes = []
         super(PoolMPI, self).__init__(**kwargs)
             
-    def queue_job(self, item):
-        """Put one job in the queue to be processed"""
-        self.queue.append(item)
-
     def start_jobs(self, run=True, analyze=True, groups=None, **kwargs):
         from mpi4py import MPI
 
@@ -151,121 +140,137 @@ class PoolMPI(Pool):
         self.select(groups=groups)
         self.prepare(**kwargs)
 
-        rank = MPI.COMM_WORLD.Get_rank()
-        if rank == 0:
+        self.rank = MPI.COMM_WORLD.Get_rank()
+        if self.rank == 0:
             self.mpi_controller(run=run, analyze=analyze, **kwargs)
         else:
             self.mpi_worker()
         
     # MPI function for usage on cluster
     def mpi_controller(self, run=True, analyze=True, **kwargs):
-        from mpi4py import MPI
-        
-        process_list = range(1, MPI.COMM_WORLD.Get_size())
-        rank = MPI.COMM_WORLD.Get_rank()
-        proc_name = MPI.Get_processor_name()
-        status = MPI.Status()
-        
-        if self.debug:
-            print "Controller %i on %s: ready!" % (rank, proc_name)
 
         import progressbar
         self.pbar = progressbar.ProgressBar().start()
 
-        counter=0
         if run and analyze:
             raise ValueError('Either run or analyze can be true. Call this function twice.')
-
+        
         if run:
-            if self.debug:
-                print self.queue
-            workers_done = []
-            queue = iter(self.queue)
-            self.pbar.maxval = len(self.queue)
-            # Feed all queued jobs to the childs
-            while(True):
-                # Create iterator
-                status = MPI.Status()
-                recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-                if self.debug:
-                    print "Controller: received tag %i from %s" % (status.tag, status.source)
-                if status.tag == 10:
-                    try:
-                        task = queue.next()
-                        self.pbar.update(counter)
-                        counter+=1
-                        # Send job to worker
-                        if self.debug:
-                            print "Controller: Sending task"
-                        MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
+            self.mpi_controller_run()
+        if analyze:
+            self.mpi_controller_analyze()
 
-                    except StopIteration:
-                        # Task queue is empty
+    def mpi_controller_run(self):
+        from mpi4py import MPI
+        
+        process_list = range(1, MPI.COMM_WORLD.Get_size())
+        proc_name = MPI.Get_processor_name()
+        status = MPI.Status()
+        if self.debug:
+            print "Controller %i on %s: ready!" % (self.rank, proc_name)
+
+        counter=0
+
+        if self.debug:
+            print self.queue
+        workers_done = []
+        queue = iter(self.queue)
+        self.pbar.maxval = len(self.queue)
+        # Feed all queued jobs to the childs
+        while(True):
+            # Create iterator
+            status = MPI.Status()
+            recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+            if self.debug:
+                print "Controller: received tag %i from %s" % (status.tag, status.source)
+            if status.tag == 10:
+                try:
+                    task = queue.next()
+                    self.pbar.update(counter)
+                    counter+=1
+                    # Send job to worker
+                    if self.debug:
+                        print "Controller: Sending task"
+                    MPI.COMM_WORLD.send(task, dest=status.source, tag=10)
+
+                except StopIteration:
+                    # Task queue is empty
+                    if self.debug:
+                        print "Controller: Task queue is empty"
+
+                        workers_done.append(status.source)
                         if self.debug:
-                            print "Controller: Task queue is empty"
-                        if analyze:
-                            workers_done.append(status.source)
-                            if self.debug:
-                                print workers_done
-                            if len(workers_done) == len(process_list):
-                                break
-                            else:
-                                continue
+                            print workers_done
+                        if set(workers_done) == set(process_list):
+                            break
                         else:
-                            if self.debug:
-                                print "Controller: Sending kill signal"
-                            MPI.COMM_WORLD.send([], dest=status.source, tag=2)
+                            continue
+                    else:
+                        if self.debug:
+                            print "Controller: Sending kill signal"
+                        MPI.COMM_WORLD.send([], dest=status.source, tag=2)
                         
 
-                elif status.tag == 2: # Exit
-                    process_list.remove(status.source)
-                    if self.debug:
-                        print 'Process %i exited' % status.source
-                        print 'Processes left: ' + str(process_list)
-                else:
-                    print 'Unkown tag %i with msg %s' % (status.tag, str(data))
+            elif status.tag == 2: # Exit
+                process_list.remove(status.source)
+                if self.debug:
+                    print 'Process %i exited' % status.source
+                    print 'Processes left: ' + str(process_list)
+            else:
+                print 'Unkown tag %i with msg %s' % (status.tag, str(data))
 
-                if len(process_list) == 0:
-                    self.pbar.finish()
-                    if self.debug:
-                        print "No processes left"
-                    break
+            if len(process_list) == 0:
+                self.pbar.finish()
+                if self.debug:
+                    print "No processes left"
+                return True
 
-        # All jobs finished, analyze.
-        if analyze:
-            if self.debug:
-                print "Controller: Analyzing jobs"
-            iter_models = self.instantiated_models_dict.iterkeys()
-            self.pbar.maxval = len(self.instantiated_models_dict)
-            while(True):
-                status = MPI.Status()
-                recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+        return False
 
-                if status.tag == 10:
-                    try:
-                        # Get model
-                        task = iter_models.next()
-                        self.pbar.update(counter)
-                        counter+=1
-                    except StopIteration:
-                        # Empty, send kill signal (coded as tag 2)
-                        MPI.COMM_WORLD.send([], dest=status.source, tag=2)
+    def mpi_controller_analyze(self):
+        from mpi4py import MPI
+        
+        process_list = range(1, MPI.COMM_WORLD.Get_size())
+        proc_name = MPI.Get_processor_name()
+        status = MPI.Status()
+        
+        counter = 0
 
-                    MPI.COMM_WORLD.send(task, dest=status.source, tag=11)
+        if self.debug:
+            print "Controller %i on %s: Analyzing jobs!" % (self.rank, proc_name)
 
-                elif status.tag == 2: # Exit
-                    process_list.remove(status.source)
-                    if self.debug:
-                        print 'Process %i exited' % status.source
-                        print 'Processes left: ' + str(process_list)
-                else:
-                    print 'Unkown tag %i with msg %s' % (status.tag, str(recv))
+        iter_models = self.instantiated_models_dict.iterkeys()
+        self.pbar.maxval = len(self.instantiated_models_dict)
 
-                if len(process_list) == 0:
-                    if self.debug:
-                        print "No processes left"
-                    self.pbar.finish()
-                    break
+        while(True):
+            status = MPI.Status()
+            recv = MPI.COMM_WORLD.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+
+            if status.tag == 10:
+                try:
+                    # Get model
+                    task = iter_models.next()
+                    self.pbar.update(counter)
+                    counter+=1
+                except StopIteration:
+                    # Empty, send kill signal (coded as tag 2)
+                    MPI.COMM_WORLD.send([], dest=status.source, tag=2)
+
+                MPI.COMM_WORLD.send(task, dest=status.source, tag=11)
+
+            elif status.tag == 2: # Exit
+                process_list.remove(status.source)
+                if self.debug:
+                    print 'Process %i exited' % status.source
+                    print 'Processes left: ' + str(process_list)
+            else:
+                print 'Unkown tag %i with msg %s' % (status.tag, str(recv))
+
+            if len(process_list) == 0:
+                if self.debug:
+                    print "No processes left"
+                self.pbar.finish()
+                return True
 
         return False
                 
@@ -278,40 +283,39 @@ class PoolMPI(Pool):
 
         from mpi4py import MPI
         
-        rank = MPI.COMM_WORLD.Get_rank()
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
         if self.debug:
-            print "Worker %i on %s: ready!" % (rank, proc_name)
+            print "Worker %i on %s: ready!" % (self.rank, proc_name)
         # Send ready
-        MPI.COMM_WORLD.send([{'rank':rank, 'name':proc_name}], dest=0, tag=10)
+        MPI.COMM_WORLD.send([{'rank':self.rank, 'name':proc_name}], dest=0, tag=10)
 
         # Start main data loop
         while True:
             # Get some data
             if self.debug:
-                print "Worker %i on %s: waiting for data" % (rank, proc_name)
+                print "Worker %i on %s: waiting for data" % (self.rank, proc_name)
             recv = MPI.COMM_WORLD.recv(source=0, tag=MPI.ANY_TAG, status=status)
             if self.debug:
-                print "Worker %i on %s: received data, tag: %i" % (rank, proc_name, status.tag)
+                print "Worker %i on %s: received data, tag: %i" % (self.rank, proc_name, status.tag)
             
             if status.tag == 2:
                 if self.debug:
-                    print "Worker %i on %s: recieved kill signal" % (rank, proc_name)
+                    print "Worker %i on %s: recieved kill signal" % (self.rank, proc_name)
                 MPI.COMM_WORLD.send([], dest=0, tag=2)
                 return
 
             if status.tag == 10:
                 # Run emergent
                 if self.debug:
-                    print "Worker %i on %s: Calling emergent: %s" % (rank, proc_name, recv)
+                    print "Worker %i on %s: Calling emergent: %s" % (self.rank, proc_name, recv)
                 #recv['debug'] = True
                 call_emergent(dict_to_list(recv), silent=not(self.debug), emergent_exe=self.emergent_exe, prefix=self.prefix)
 
             elif status.tag == 11:
                 # Analyze model
                 if self.debug:
-                    print "Worker %i on %s: Analyzing model %s" % (rank, proc_name, recv)
+                    print "Worker %i on %s: Analyzing model %s" % (self.rank, proc_name, recv)
                 try:
                     model = self.instantiated_models_dict[recv]
                     model.load_logs()
@@ -319,10 +323,10 @@ class PoolMPI(Pool):
                     model.analyze()
                 except Exception, err:
                     # Only log the error, but keep on processing jobs
-                    sys.stderr.write("Worker %i on %s: ERROR: %s" % (rank, proc_name, str(err)))
+                    sys.stderr.write("Worker %i on %s: ERROR: %s" % (self.rank, proc_name, str(err)))
                     
             if self.debug:
-                print("Worker %i on %s: finished one job" % (rank, proc_name))
+                print("Worker %i on %s: finished one job" % (self.rank, proc_name))
             MPI.COMM_WORLD.send([], dest=0, tag=10)
     
         MPI.COMM_WORLD.send([], dest=0, tag=2)
