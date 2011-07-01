@@ -479,12 +479,13 @@ def main():
     set_python_exec = None
     log_dir = None
     run = False
-    groups = None
+    groups = []
     batches = 4
     verbose = False
+    exclude = []
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'mg:b:f:p:e:l:rahv', ['mpi', 'group', 'batches', 'prefix', 'emergent', 'log_dir', 'run', 'analyze', 'help', 'verbose'])
+        opts, args = getopt.getopt(sys.argv[1:], 'mg:b:f:p:e:l:rahvx:', ['mpi', 'group', 'batches', 'prefix', 'emergent', 'log_dir', 'run', 'analyze', 'help', 'verbose', 'exclude'])
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
@@ -493,7 +494,7 @@ def main():
         if o in ('-m', '--mpi'):
             mpi=True
         elif o in ('-g', '--group'):
-            groups = a.split(',')
+            groups.append(a)
 #            if groups is None:
 #                groups = [a]
 #            else:
@@ -514,6 +515,10 @@ def main():
             usage()
         elif o in ('-v', '--verbose'):
             verbose = True
+        elif o in ('-x', '--exclude'):
+            exclude.append(a)
+        else:
+            print "Command option %s not recognized."%o
 
     # Queue models
     import antisaccade
@@ -521,10 +526,11 @@ def main():
 
     if mpi:
         pool = pools.PoolMPI(emergent_exe=emergent, prefix=prefix, debug=verbose)
-        pool.start_jobs(run=run, groups=groups, analyze=analyze, batches=batches) #log_dir_abs=log_dir)
+        pool.start_jobs(run=run, groups=groups, analyze=analyze, batches=batches, exclude=exclude) #log_dir_abs=log_dir)
+
     else: # Run locally
         pool = pools.Pool(emergent_exe=emergent, prefix=prefix, debug=verbose)
-        pool.select(groups)
+        pool.select(groups, exclude=exclude)
         pool.prepare(batches=batches)
         if run:
             raise NotImplementedError, "Running locally not implemented."

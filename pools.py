@@ -110,7 +110,7 @@ class Pool(object):
     def select(self, groups=None, exclude=()):
         """Check if models are registered and instantiated. If not,
         register and instantiate them."""
-        if groups is None:
+        if not groups:
             groups = registered_models.groups.keys()
             
         # Check that all groups exist
@@ -120,7 +120,9 @@ class Pool(object):
         selected_groups = set.intersection(set(registered_models.groups.keys()), set(groups))
 
         # Exclude models
-        selected_groups = selected_groups.discard(set(exclude))
+        selected_groups = selected_groups.difference(set(exclude))
+
+        print selected_groups
 
         # Add models from selected groups
         for group in selected_groups:
@@ -133,11 +135,11 @@ class PoolMPI(Pool):
         self.processes = []
         super(PoolMPI, self).__init__(**kwargs)
             
-    def start_jobs(self, run=True, analyze=True, groups=None, **kwargs):
+    def start_jobs(self, run=True, analyze=True, groups=None, exclude=(), **kwargs):
         from mpi4py import MPI
 
         # Put all jobs in the queue
-        self.select(groups=groups)
+        self.select(groups=groups, exclude=exclude)
         self.prepare(**kwargs)
 
         self.rank = MPI.COMM_WORLD.Get_rank()
