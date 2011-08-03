@@ -34,7 +34,7 @@ class Base(object):
 	    #proj_name = 'BG_IFG_striatum_split_salience4'
             proj_name = 'BG_inhib8'
 	self.proj = proj_name
-	
+
 	if prefix is None:
 	    prefix = '/home/wiecki/working/projects/bg_inhib/'
 	self.prefix = prefix
@@ -55,7 +55,7 @@ class Base(object):
 	self.plot_prefix_png = self.prefix + 'plots/png/' + self.__class__.__name__ + '_'
 	self.plot_prefix_eps = self.prefix + 'plots/eps/' + self.__class__.__name__ + '_'
 	self.plot_prefix_pdf = self.prefix + 'plots/pdf/' + self.__class__.__name__ + '_'
-	self.colors = ('r','b','g','y','c')
+	self.colors = ('r','b','g','y','c','k','m','w')
 
 	self.ddms = {}
 	self.ddms_results = {}
@@ -65,7 +65,7 @@ class Base(object):
 		     'log_dir': self.log_dir,
 		     'batches': 1,
                      'SZ_mode': 'false',
-                     'rnd_init': 'NEW_SEED',
+                     'rnd_init': 'OLD_SEED',
                      'LC_mode': 'phasic',
                      'motivational_bias': 'NO_BIAS'}
 
@@ -91,6 +91,7 @@ class Base(object):
 	    for batch in range(self.batches):
 		new_flag = copy(flag)
 		new_flag['tag'] = flag['tag'] + '_b' + str(batch)
+                new_flag['init_seed'] = batch
 		flags.append(new_flag)
 
 	return flags
@@ -157,7 +158,7 @@ class Base(object):
         from pylab import savefig
 	savefig(self.plot_prefix_png + name + ".png")
 	savefig(self.plot_prefix_eps + name + ".eps")
-	#savefig(self.plot_prefix_pdf + name + ".pdf")
+	savefig(self.plot_prefix_pdf + name + ".pdf")
 
     def fit_hddm(self, depends_on=None, plot=False, mcmc=False, **kwargs):
         import hddm
@@ -262,7 +263,8 @@ class BaseCycle(Base):
 
         if avg: # Plot average line
             y = np.mean(data, axis=0)
-            if len(data.shape) == 0:
+            print data.shape
+            if data.shape == (0,):
                 raise ValueError('Data array is empty.')
             if data.shape[1] != 0:
                 sem_ = sem(data, axis=0)

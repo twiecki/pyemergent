@@ -31,7 +31,7 @@ def quantize(x, bins=7):
     return (out, np.asarray(idx))
     
 class Saccade(emergent.Base):
-    def __init__(self, pre_trial_cue=True, intact=True, SZ=False, PD=False, NE=False, STN=False, motivation=False, max_epoch=50, task=None, **kwargs):
+    def __init__(self, pre_trial_cue=True, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, max_epoch=50, task=None, **kwargs):
 	super(Saccade, self).__init__(**kwargs)
 
 	# Set ddm to have fixed starting point and that drift rate
@@ -95,7 +95,20 @@ class Saccade(emergent.Base):
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 	    self.flags[-1]['tonic_DA_intact'] = 0.029
-	    self.flags[-1]['STN_lesion'] = .8
+	    self.flags[-1]['STN_lesion'] = .5
+
+            #self.flags.append(copy(self.flag))
+            #self.tags.append('DBS_on_pretrial')
+            #self.flags[-1]['tag'] = '_' + self.tags[-1]
+	    #self.flags[-1]['tonic_DA_intact'] = 0.029
+	    #self.flags[-1]['STN_lesion'] = .5
+            #self.flags[-1]['DLPFC_speed_mean_mod'] = .1
+
+        if pretrial:
+            self.flags.append(copy(self.flag))
+            self.tags.append('Pretrial')
+            self.flags[-1]['tag'] = '_' + self.tags[-1]
+            self.flags[-1]['DLPFC_speed_mean_mod'] = .1
 
         if motivation:
             self.flags.append(copy(self.flag))
@@ -411,7 +424,7 @@ class Saccade_ontrial(Saccade):
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, max_epoch=50, **kwargs)
+	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, pretrial=False, max_epoch=50, **kwargs)
 
 #@pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial_simple(Saccade):
@@ -421,7 +434,7 @@ class Saccade_pretrial_simple(Saccade):
 @pools.register_group(['flanker', 'pretrial', 'nocycle'])
 class Flanker_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Flanker_pretrial, self).__init__(pre_trial_cue=True, intact=False, motivation=True, task='FLANKER', max_epoch=50, **kwargs)
+	super(Flanker_pretrial, self).__init__(pre_trial_cue=True, intact=True, motivation=True, STN=True, task='FLANKER', max_epoch=50, **kwargs)
 
 
 #######
