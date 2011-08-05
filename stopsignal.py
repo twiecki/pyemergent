@@ -20,10 +20,11 @@ from emergent import sem
 def calc_SSRT(GoRT, SSD, numtrials=-150):
     """Calculate the SSRT for a give GoRT distribution (array) and a given staircase run,
     the 50% inhibitory interval is computed using numtrials last trials of staircase"""
-    median = np.median(GoRT)
-    mean = np.mean(GoRT)
-    p_inhib = np.mean(SSD[numtrials:])
-    return mean-p_inhib
+    median_go = np.median(GoRT)
+    mean_go = np.mean(GoRT)
+    mean_ssd = np.mean(SSD[np.diff(SSD)!=0])
+    mean_ssd = np.mean(SSD[numtrials:])
+    return mean_go-mean_ssd
 
 def calc_cond_mean_std(data, cond, col):
     cond_idx = np.where(cond)[0]
@@ -35,7 +36,7 @@ def calc_cond_mean_std(data, cond, col):
 
 
 class StopSignalBase(emergent.Base):
-    def __init__(self, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, IFG=False, **kwargs):
+    def __init__(self, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, IFG=False, salience=False, **kwargs):
 	super(StopSignalBase, self).__init__(**kwargs)
 	self.SSRT = {}
 	self.GoRT = {}
@@ -68,13 +69,14 @@ class StopSignalBase(emergent.Base):
         if intact:
             self.flags.append(copy(self.flag))
             self.tags.append('intact')
+            self.flags[-1]['LC_mode'] = 'phasic'
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 
 	if SZ:
             self.flags.append(copy(self.flag))
 	    self.tags.append('Increased_tonic_DA')
 	    self.flags[-1]['tag'] = '_' + self.tags[-1]
-            self.flags[-1]['tonic_DA_intact'] = 0.04
+            self.flags[-1]['tonic_DA_intact'] = 0.032
 	    self.flags[-1]['SZ_mode'] = 'true'
 
 	if PD:
@@ -84,18 +86,27 @@ class StopSignalBase(emergent.Base):
 	    self.flags[-1]['SZ_mode'] = 'false'
 	    self.flags[-1]['tonic_DA_intact'] = 0.029
 
+        # if NE:
+        #     for tonic_NE in np.linspace(0,1,4):
+        #         self.flags.append(copy(self.flag))
+        #         self.tags.append('Tonic_NE_%f'%tonic_NE)
+        #         self.flags[-1]['tag'] = '_' + self.tags[-1]
+        #         self.flags[-1]['LC_mode'] = 'tonic'
+        #         self.flags[-1]['tonic_NE'] = tonic_NE
+
         if NE:
             self.flags.append(copy(self.flag))
             self.tags.append('Tonic_NE')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['LC_mode'] = 'tonic'
+            self.flags[-1]['tonic_NE'] = 0.4
 
         if STN:
             self.flags.append(copy(self.flag))
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 	    self.flags[-1]['tonic_DA_intact'] = 0.03
-	    self.flags[-1]['STN_lesion'] = .6
+	    self.flags[-1]['STN_lesion'] = .8
 
         if motivation:
             self.flags.append(copy(self.flag))
@@ -112,8 +123,13 @@ class StopSignalBase(emergent.Base):
             self.flags.append(copy(self.flag))
             self.tags.append('IFG_lesion')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
-            self.flags[-1]['IFG_lesion'] = .6
+            self.flags[-1]['IFG_lesion'] = .5
 
+        if salience:
+            self.flags.append(copy(self.flag))
+            self.tags.append('salience')
+            self.flags[-1]['tag'] = '_' + self.tags[-1]
+            self.flags[-1]['salience'] = .75
 
     def _preprocess_data(self, data, tag, cutoff=-150):
         self.SSRT[tag] = []
@@ -139,8 +155,8 @@ class StopSignalBase(emergent.Base):
             prob = np.sum((settled['inhibited'] == 0) &
                           (settled['SS_presented'] == 1)) / np.sum((settled['SS_presented'] == 1))
 
-            if prob < .45 or prob > 0.55:
-                continue
+            #if prob < .45 or prob > 0.55:
+            #    continue
 
             self.response_prob[tag].append(prob)
 
@@ -197,10 +213,10 @@ class StopSignalBase(emergent.Base):
 	    # Plot staircase
 	    for b_idx, b_data in enumerate(self.b_data[tag]):
 		if b_idx == 0: # If first, add label
-		    plt.plot(b_data['SSD'], self.colors[t], label=self.names[t])
+		    plt.plot(b_data['SSD'], color=plt.cm.prism(t), label=self.names[t])
 		else:
 		    #break
-		    plt.plot(b_data['SSD'], self.colors[t])
+		    plt.plot(b_data['SSD'], color=plt.cm.prism(t))
 		plt.title('Staircases')
 		plt.xlabel('Trials')
 		plt.ylabel('SSD')
@@ -313,7 +329,7 @@ class StopSignalBase(emergent.Base):
 @pools.register_group(['stopsignal', 'staircase', 'all'])
 class StopSignal(StopSignalBase):
     def __init__(self, **kwargs):
-        super(StopSignal, self).__init__(intact=True, NE=True, STN=True, PD=True, SZ=True, motivation=True, IFG=True, **kwargs)
+        super(StopSignal, self).__init__(intact=True, NE=True, STN=False, PD=False, motivation=False, IFG=False, **kwargs)
 
         self.names = self.tags
         
@@ -334,391 +350,7 @@ class StopSignal(StopSignalBase):
         self.plot_staircase()
         self.save_plot('staircase')
 
-#@pools.register_group(['stopsignal', 'staircase'])
-class Norepinephrine(StopSignalBase):
-    def __init__(self, **kwargs):
-        super(Norepinephrine, self).__init__(**kwargs)
 
-        self.tags = ['phasic', 'tonic']
-        
-	#self.flag['test_SSD_mode'] = True
-        #self.flag['SSD_start'] = 0
-        #self.flag['SSD_stop'] = 70
-
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-        self.flag['LC_mode'] = self.tags[0]
-        self.flag['tag'] = '_'+self.tags[0]
-        self.flags.append(copy(self.flag))
-
-        self.flag['LC_mode'] = self.tags[1]
-        self.flag['tag'] = '_'+self.tags[1]
-        self.flags.append(copy(self.flag))
-
-        self.names = self.tags
-        
-    def analyze(self):
-        self.new_fig()
-        self.plot_RT_dist()
-        self.save_plot('NE_GoRTs')
-
-        self.new_fig()
-        self.plot_SSRTs()
-        self.save_plot('NE_SSRTs')
-
-        self.new_fig()
-        self.plot_staircase()
-
-#@pools.register_group(['stopsignal', 'NE', 'nostaircase'])
-class NorepinephrineNoStair(StopSignalBase):
-    def __init__(self, **kwargs):
-        super(NorepinephrineNoStair, self).__init__(**kwargs)
-
-        self.tags = ['phasic', 'tonic']
-        
-	self.flag['test_SSD_mode'] = True
-        self.flag['SSD_start'] = 0
-        self.flag['SSD_stop'] = 40
-
-        self.flag['LC_mode'] = self.tags[0]
-        self.flag['tag'] = '_'+self.tags[0]
-        self.flags.append(copy(self.flag))
-
-        self.flag['LC_mode'] = self.tags[1]
-        self.flag['tag'] = '_'+self.tags[1]
-        self.flags.append(copy(self.flag))
-
-        self.names = self.tags
-        
-    def analyze(self):
-        self.new_fig()
-        for i,tag in enumerate(self.tags):
-            self.plot_SSD_vs_inhib(i,tag)
-        self.save_plot('NE_SSD_vs_inhib')
-
-
-@pools.register_group(['stopsignal', 'salience'])
-class Salience(StopSignalBase):
-    def __init__(self, detection_probs=None, **kwargs):
-	super(Salience, self).__init__(**kwargs)
-	self.tags = []
-
-	if detection_probs is None:
-	    self.detection_probs = np.linspace(0,1,3)
-	else:
-	    self.detection_probs = detection_probs
-
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-
-	for detection_prob in self.detection_probs:
-	    self.flag['salience'] = detection_prob
-	    tag = 'salience_' + str(detection_prob)
-	    self.tags.append(tag)
-	    self.flag['tag'] = '_' + tag
-	    self.flags.append(copy(self.flag))
-
-        self.names = self.tags
-
-    def analyze(self):
-	self.new_fig()
-	SSRT_mean = [np.mean(self.SSRT[tag]) for tag in self.tags]
-	SSRT_sem = [sem(self.SSRT[tag]) for tag in self.tags]
-	
-	plt.errorbar(self.detection_probs, SSRT_mean, yerr=SSRT_sem)
-	plt.title('Salience detection influence on SSRTs')
-	plt.xlabel('Stop-Signal detection probability')
-	plt.ylabel('SSRT')
-	self.save_plot('SSRT')
-	    
-	    
-@pools.register_group(['stopsignal', 'seq'])
-class StopSignal_IFGlesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0.,.3), **kwargs):
-	super(StopSignal_IFGlesion, self).__init__(**kwargs)
-	self.tags = []
-	self.IFGs = []
-	self.names = []
-	
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-        self.flag['max_epochs'] = 300
-	
-	for IFG_lesion in IFG_lesions:
-	    self.flag['IFG_lesion'] = IFG_lesion
-	    tag = 'IFG_' + str(IFG_lesion)
-	    self.tags.append(tag)
-	    self.names.append(str(int(IFG_lesion*100)) + '%' + ' IFG lesion')
-	    self.IFGs.append(IFG_lesion)
-	    self.flag['tag'] = '_' + tag
-	    self.flags.append(copy(self.flag))
-
-    def analyze(self):
-	self.new_fig()
-	self.plot_staircase()
-	self.save_plot("Staircase")
-	
-	self.new_fig()
-	self.plot_GoRespVsInhibResp()
-	self.save_plot("RTs_Go_vs_inhib")
-	
-	self.new_fig()
-	self.plot_RT_dist()
-	self.save_plot("GoRT_histo")
-	
-	self.new_fig()
-	self.plot_seq_effects()
-	self.save_plot("Seq_effects")
-
-	return
-
-    def plot_seq_effects_sel(self):
-	self.new_fig()
-	self.plot_seq_go_RT()
-	self.save_plot("Seq_Go_RT")
-	
-	self.new_fig()
-	self.plot_seq_stop_RT()
-	self.save_plot("Seq_Stop_RT")
-	
-	self.new_fig()
-	self.plot_seq_stop_inhib()
-	self.save_plot("Seq_Stop_SS_inhib")
-	
-    def plot_seq_go_RT(self):
-	for i,tag in enumerate(self.tags):
-	    # Group data accordingly
-	    data_mean, data_sem = emergent.group_batch(self.data[tag], ['stimulus_changed', 'SS_presented', 'inhibited', 'prev_trial_code'])
-
-	    # Select subsets
-	    # Trials that follow Go trials and the stimuli match
-	    match_go_idx = (data_mean['stimulus_changed'] == 0) & \
-			   (data_mean['SS_presented'] == 0) & \
-			   (data_mean['prev_trial_code'] <= 1) & \
-			   (data_mean['inhibited'] == 0)
-
-	    data_match_go = data_mean[data_match_go_idx]
-
-	    # Trials that follow Go trials and the stimuli don't match
-	    nomatch_go_idx = (data['stimulus_changed'] == 1) & \
-			     (data['SS_presented'] == 0) & \
-			     (data['prev_trial_code'] <= 1) & \
-			     (data['inhibited'] == 0)
-	    
-	    data_nomatch_go = data_mean[data_nomatch_go_idx, :]
-
-	    # TODO: check for bug.
-	    plt.errorbar([0,1], (np.mean(data_mean[match_go_idx]['minus_cycles'], 0),
-				np.mean(data_mean[nomatch_go_idx]['minus_cycles'],0)),
-			yerr=(data_sem[match_go_idx]['minus_cycles']),
-			label=self.names[i])
-
-	plt.xticks([0,1], ('No match', 'Match'))
-	plt.xlim((-.25, 1.25))
-	plt.title('Sequential effects of stimulus matching after Go trials')
-	plt.ylabel('Mean RTs (Cycles)')
-	plt.legend(loc=0, fancybox=True)
-	    
-    def plot_seq_stop_RT(self):
-	for i,tag in enumerate(self.tags):
-	    # Group data accordingly
-	    data_gp, data_gp_idx = emergent.group(self.data[tag], self.data_idx, ['batch_num', 'stimulus_changed', 'SS_presented', 'inhibited', 'prev_trial_code'])
-	    data, data_idx = emergent.group(data_gp, data_gp_idx, ['stimulus_changed', 'SS_presented', 'inhibited', 'prev_trial_code'])
-	
-
-	    
-	    # Trials that follow Stop trials and the stimuli match
-	    data_match_stop_idx = np.where((data[:, data_idx['stimulus_changed']] == 0) &
-					   (data[:, data_idx['SS_presented']] == 0) &
-					   (data[:, data_idx['prev_trial_code']] > 1) &
-					   (data[:, data_idx['inhibited']] == 0))[0]
-	    data_match_stop = data[data_match_stop_idx, :]
-
-	    # Trials that follow Stop trials and the stimuli don't match
-	    data_nomatch_stop_idx = np.where((data[:, data_idx['stimulus_changed']] == 1) &
-					     (data[:, data_idx['SS_presented']] == 0) &
-					     (data[:, data_idx['prev_trial_code']] > 1) &
-					     (data[:, data_idx['inhibited']] == 0))[0]
-	    data_nomatch_stop = data[data_nomatch_stop_idx, :]
-	    
-	    RT_mean_col = data_idx['minus_cycles_mean_mean']
-	    RT_sem_col = data_idx['minus_cycles_mean_sem']
-	    plt.errorbar([0,1], (np.mean(data_nomatch_stop[:, RT_mean_col],0), np.mean(data_match_stop[:, RT_mean_col],0)),
-		    yerr=(data_nomatch_stop[0, RT_sem_col]), label=self.names[i])
-
-	plt.xticks([0,1], ('No match', 'Match'))
-	plt.xlim((-.25, 1.25))
-	plt.title('Sequential effects of stimulus matching after Stop Signals')
-	plt.ylabel('Mean RTs (cycles)')
-	plt.legend(loc=0, fancybox=True)
-
-
-    def plot_seq_stop_inhib(self):
-	for i,tag in enumerate(self.tags):
-	    # Group data accordingly
-	    (data_gp, data_gp_idx) = emergent.group(self.data[tag], self.data_idx, ['batch_num', 'stimulus_changed', 'SS_presented', 'prev_trial_code'])
-	    data, data_idx = emergent.group(data_gp, data_gp_idx, ['stimulus_changed', 'SS_presented', 'prev_trial_code'])
-	
-
-	    
-	    # Trials that follow Stop trials and the stimuli match
-	    data_match_stop_idx = np.where((data[:, data_idx['stimulus_changed']] == 0) &
-					   (data[:, data_idx['SS_presented']] == 1) &
-					   (data[:, data_idx['prev_trial_code']] > 1))[0]
-
-	    data_match_stop = data[data_match_stop_idx, :]
-
-	    # Trials that follow Stop trials and the stimuli don't match
-	    data_nomatch_stop_idx = np.where((data[:, data_idx['stimulus_changed']] == 1) &
-					     (data[:, data_idx['SS_presented']] == 1) &
-					     (data[:, data_idx['prev_trial_code']] > 1))[0]
-	    data_nomatch_stop = data[data_nomatch_stop_idx, :]
-	    
-	    RT_mean_col = data_idx['inhibited_mean_mean']
-	    RT_sem_col = data_idx['inhibited_mean_sem']
-	    plt.errorbar([0,1], (np.mean(data_nomatch_stop[:, RT_mean_col],0), np.mean(data_match_stop[:, RT_mean_col],0)),
-		    yerr=(data_nomatch_stop[0, RT_sem_col]), label=self.names[i])
-
-	plt.xticks([0,1], ('No match', 'Match'))
-	plt.xlim((-.25, 1.25))
-	plt.title('Sequential effects of stimulus matching on stop signal inhibition probability')
-	plt.ylabel('SS_inhibit (probability)')
-	plt.legend(loc=0, fancybox=True)
-
-@pools.register_group(['stopsignal', 'motivation'])
-class MotivationalEffects(StopSignalBase):
-    def __init__(self, **kwargs):
-	super(MotivationalEffects, self).__init__(**kwargs)
-	#self.tags = ['NO_BIAS', 'ACC_BIAS', 'SPEED_BIAS']
-	self.tags = ['SPEED_BIAS', 'ACC_BIAS']
-	self.names = ['Speed', 'Accuracy']
-
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-	for tag in self.tags:
-	    self.flag['tag'] = '_' + tag
-	    self.flag['motivational_bias'] = tag
-	    self.flags.append(copy(self.flag))
-
-    def analyze(self):
-	plt.subplot(121)#, projection='frameaxes')
-	self.plot_motivation_GoRT()
-	plt.subplot(122)#, projection='frameaxes')
-	self.plot_motivation_SSRT()
-	self.save_plot("RT_and_SSRT")
-	
-	self.new_fig()
-	self.plot_motivation_SSRT()
-	self.save_plot("SSRT")
-
-    def plot_motivation_GoRT(self):
-	for i,tag in enumerate(self.tags):
-	    data_mean, data_sem = emergent.group(self.data[tag], ['SS_presented', 'inhibited'])
-
-	    noss_resp = (data_mean['SS_presented'] == 0) & \
-			(data_mean['inhibited'] == 0)
-				 
-	    plt.bar(i, data_mean[noss_resp]['minus_cycles'],
-		   yerr = data_sem[noss_resp]['minus_cycles'],
-		   color=self.colors[i], ecolor='k', width=0.8)
-
-	plt.title('Motivational influences on GoRT')
-	plt.ylabel('Response Time (Cycles)')
-	plt.xticks(np.array(range(len(self.tags)))+.5, self.names)
-
-    def plot_motivation_SS_inhib(self):
-	for i,tag in enumerate(self.tags):
-	    data_mean, data_sem = emergent.group(self.data[tag], ['SS_presented'])
-
-	    ss_pres = data_mean['SS_presented'] == 1
-
-	    plt.bar(i, data_mean[ss_pres]['inhibited'],
-		   yerr = data_sem[ss_pres]['inhibited'],
-		   color=self.colors[i], ecolor='k', width=0.8)
-
-	plt.title('Motivational influences on Stop accuracy')
-	plt.ylabel('Stop Response Rate')
-	plt.xticks(np.array(range(len(self.tags)))+.5, self.names)
-
-    def plot_motivation_SSRT(self):
-	for i,tag in enumerate(self.tags):
-	    plt.bar(i, np.mean(self.SSRT[tag]), yerr = sem(self.SSRT[tag]),
-		   color=self.colors[i], ecolor='k', width=0.8)
-
-	plt.title('Motivational influences on SSRTs')
-	plt.ylabel('SSRT')
-	plt.xticks(np.array(range(len(self.tags)))+.5, self.names)
-
-@pools.register_group(['stopsignal', 'ifg_lesion'])
-class IFGLesion(StopSignalBase):
-    def __init__(self, IFG_lesions=(0,0.3), **kwargs):
-	super(IFGLesion, self).__init__(**kwargs)
-	self.flag['test_SSD_mode'] = True
-        self.flag['SSD_start'] = 0
-        self.flag['SSD_stop'] = 40
-	#self.flag['SS_prob'] = 1.
-	self.tags = []
-	self.names = []
-	self.IFG_lesions = IFG_lesions
-
-	for IFG_lesion in self.IFG_lesions:
-	    self.flag['IFG_lesion'] = IFG_lesion
-	    tag = 'IFG_' + str(IFG_lesion)
-	    self.names.append(str(int(IFG_lesion*100)) + '%' + ' IFG lesion')
-	    self.tags.append(tag)
-	    self.flag['tag'] = '_' + tag
-	    self.flags.append(copy(self.flag))
-
-    def analyze(self):
-	self.new_fig()
-	for i,lesion in enumerate(self.IFG_lesions):
-            tag = 'IFG_' + str(lesion)
-            self.plot_SSD_vs_inhib(i, tag)
-            
-	self.save_plot("SSD_VS_SS_inhib")
-
-class Crit_VS_Noncrit_stop(StopSignalBase):
-    def __init__(self, **kwargs):
-	super(Crit_VS_Noncrit_stop, self).__init__(**kwargs)
-	self.tags = ['critical']
-
-	self.flag['tag'] = '_' + self.tags[0]
-	
-	# Run critical direction
-	self.flag['critical'] = True
-	self.flag['staircase_mode'] = True
-	self.flag['SS_prob'] = .25
-	self.flags.append(copy(self.flag))
-
-    def analyze(self):
-	self.new_fig()
-	# TODO Check if this makes sense, why not use group_batch?
-	data_mean, data_sem = emergent.group_batch(self.data['critical'], ['SS_presented', 'trial_name', 'prev_trial_code'])
-
-	# Cut out critical direction trials
-	data_crit_idx = np.where((data[:,data_idx['SS_presented']] == 1.0) & # Stop-Signal presented and
-				 (data[:,data_idx['trial_name']] == 1.0) &   # Non-critical direction and
-				 (data[:,data_idx['prev_trial_code']] == 0))[0] # GoTrail repsonse
-	
-	data_go_idx = np.where((data[:,data_idx['SS_presented']] == 0.0) & # No Stop-Signal presented and
-			       (data[:,data_idx['prev_trial_code']] == 0))[0] # GoTrial response
-				
-	data_crit = data[data_crit_idx, :]
-	data_go = data[data_go_idx, :]
-
-	RT_col = data_idx['minus_cycles_mean']
-	means = [np.mean(data_crit[:, RT_col]), np.mean(data_go[:, RT_col])]
-
-	sems = [sem(data_crit[:, RT_col]), sem(data_go[:, RT_col])]
-		 
-	plt.errorbar([0,1], means, yerr=sems)
-	plt.title('Stop-Signal during non-critical direction trials')
-	plt.xlabel('Trial type')
-	plt.ylabel('GoRT')
-	plt.xlim([-.5,1.5])
-	plt.xticks([0,1], ['Non-critical direction + Stop-Signal', 'Regular Go-Trial'])
-	
-	self.save_plot("RTs")
 
 @pools.register_group(['stopsignal', 'cycle'])
 class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
