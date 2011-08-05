@@ -84,11 +84,20 @@ class Saccade(emergent.Base):
 	    self.flags[-1]['SZ_mode'] = 'false'
 	    self.flags[-1]['tonic_DA_intact'] = 0.027
 
+        # if NE:
+        #     for tonic_NE in np.linspace(0,1,8):
+        #         self.flags.append(copy(self.flag))
+        #         self.tags.append('Tonic_NE_%f'%tonic_NE)
+        #         self.flags[-1]['tag'] = '_' + self.tags[-1]
+        #         self.flags[-1]['LC_mode'] = 'tonic'
+        #         self.flags[-1]['tonic_NE'] = tonic_NE
+
         if NE:
             self.flags.append(copy(self.flag))
             self.tags.append('Tonic_NE')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['LC_mode'] = 'tonic'
+            self.flags[-1]['tonic_NE'] = 0.4
 
         if STN:
             self.flags.append(copy(self.flag))
@@ -258,7 +267,7 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
 	    #plt.ylim((0, 200))
 
-	plt.legend(loc=1, fancybox=True)
+	plt.legend(loc=0, fancybox=True)
 
     def plot_error(self, inhibited_as_error=False):
 	for i,tag in enumerate(self.tags):
@@ -282,7 +291,7 @@ class Saccade(emergent.Base):
 	    plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
 	    plt.xlim((-0.05,.5+i))
             #plt.ylim((0,0.6))
-	plt.legend(loc=2)
+	plt.legend(loc=0)
 
     def plot_go_act(self):
 	for i,tag in enumerate(self.tags):
@@ -291,7 +300,7 @@ class Saccade(emergent.Base):
 	    plt.bar([0+i,.25+i],
 		   ordered_mean,
 		   yerr=ordered_sem,
-		   label=tag, width=self.width, color=self.colors[i], ecolor='k')
+		   label=tag, width=self.width, color=plt.cm.spectral(i), ecolor='k')
 	    plt.title('Pro/Antisaccade: Go activity averaged across batches')
 	    plt.ylabel('Go activity')
 	    plt.xlabel('Task Condition')
@@ -409,28 +418,14 @@ class SaccadeNE(Saccade):
         self.flag['LC_mode'] = self.tags[1]
         self.flags.append(copy(self.flag))
 
-#@pools.register_group(['saccade', 'ontrial', 'nocycle'])
-class Saccade_ontrial(Saccade):
-    def __init__(self, **kwargs):
-	super(Saccade_ontrial, self).__init__(pre_trial_cue=False, **kwargs)
-        self.tags.append('Lower_salience_detection')
-        self.flag['tag'] = '_' + self.tags[-1]
-        self.flag['SZ_mode'] = 'false'
-        self.flag['D1_antag'] = 0
-        self.flag['D2_antag'] = 0
-        self.flag['salience'] = .25
-        self.flags.append(copy(self.flag))
+
 
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
 	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, pretrial=False, max_epoch=50, **kwargs)
 
-#@pools.register_group(['saccade', 'pretrial', 'nocycle'])
-class Saccade_pretrial_simple(Saccade):
-    def __init__(self, **kwargs):
-	super(Saccade_pretrial_simple, self).__init__(pre_trial_cue=True, max_epoch=100, **kwargs)
-        
+
 @pools.register_group(['flanker', 'pretrial', 'nocycle'])
 class Flanker_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
@@ -1181,15 +1176,7 @@ class SaccadeCyclePreTrial(SaccadeBaseCycle):
     def __init__(self, **kwargs):
         super(SaccadeCyclePreTrial, self).__init__(pre_trial_cue=True, **kwargs)
 
-#    def analyze(self):
-#         self.analyse_Go_NoGo_left_right()
 
-
-
-#@pools.register_group(['saccade', 'cycle', 'ontrial'])
-class SaccadeCycleOnTrial(SaccadeBaseCycle):
-    def __init__(self, **kwargs):
-        super(SaccadeCycleOnTrial, self).__init__(pre_trial_cue=False, **kwargs)
 
 
 
