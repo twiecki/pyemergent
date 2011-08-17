@@ -87,7 +87,7 @@ class StopSignalBase(emergent.Base):
 	    self.flags[-1]['tonic_DA_intact'] = 0.029
 
         # if NE:
-        #     for tonic_NE in np.linspace(0,1,4):
+        #     for tonic_NE in np.linspace(0,.5,6):
         #         self.flags.append(copy(self.flag))
         #         self.tags.append('Tonic_NE_%f'%tonic_NE)
         #         self.flags[-1]['tag'] = '_' + self.tags[-1]
@@ -168,7 +168,7 @@ class StopSignalBase(emergent.Base):
             self.resp_data[tag].append(self.b_data[tag][-1][resp_idx])
 
             # Slice out trials in which a response was made and no SS was presented
-            resp_noss_idx = self.resp_data[tag][-1]['SS_presented'] == 0
+            resp_noss_idx = (self.resp_data[tag][-1]['SS_presented'] == 0) & (self.resp_data[tag][-1]['prev_trial_code'] == 0)
             self.resp_noss_data[tag].append(self.resp_data[tag][-1][resp_noss_idx])
 
             self.GoRT[tag].append(self.resp_noss_data[tag][-1]['minus_cycles'])
@@ -329,7 +329,7 @@ class StopSignalBase(emergent.Base):
 @pools.register_group(['stopsignal', 'staircase', 'all'])
 class StopSignal(StopSignalBase):
     def __init__(self, **kwargs):
-        super(StopSignal, self).__init__(intact=True, NE=True, STN=False, PD=False, motivation=False, IFG=False, **kwargs)
+        super(StopSignal, self).__init__(intact=True, NE=True, STN=True, PD=True, motivation=True, IFG=True, **kwargs)
 
         self.names = self.tags
         

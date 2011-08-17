@@ -65,7 +65,7 @@ class Base(object):
 		     'log_dir': self.log_dir,
 		     'batches': 1,
                      'SZ_mode': 'false',
-                     'rnd_init': 'OLD_SEED',
+                     #'rnd_init': 'OLD_SEED',
                      'LC_mode': 'phasic',
                      'motivational_bias': 'NO_BIAS'}
 
@@ -88,10 +88,11 @@ class Base(object):
 	new_flag = {}
 	flags = []
 	for flag in self.flags:
+            np.random.seed(31337)
 	    for batch in range(self.batches):
 		new_flag = copy(flag)
 		new_flag['tag'] = flag['tag'] + '_b' + str(batch)
-                new_flag['init_seed'] = batch
+                new_flag['init_seed'] = np.random.randint(1e5)
 		flags.append(new_flag)
 
 	return flags
@@ -497,10 +498,6 @@ def main():
             mpi=True
         elif o in ('-g', '--group'):
             groups.append(a)
-#            if groups is None:
-#                groups = [a]
-#            else:
-#                groups.append(a)
         elif o in ('-r', '--run'):
             run = True
         elif o in ('-a', '--analyze'):

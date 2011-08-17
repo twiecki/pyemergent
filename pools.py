@@ -94,7 +94,6 @@ class Pool(object):
         assert len(self.selected_models) != 0, "No models selected."
         for model in self.selected_models:
             self.instantiated_models.append(model(prefix=self.prefix, **kwargs))
-            print self.instantiated_models[-1].batches
             self.instantiated_models_dict[model.__name__] = self.instantiated_models[-1]
 
     def prepare(self, queue=True, **kwargs):
@@ -104,7 +103,6 @@ class Pool(object):
 
     def analyze(self):
         for model in self.instantiated_models:
-            print model.batches
             model.load_logs()
             model.preprocess_data()
             model.analyze()
@@ -119,15 +117,12 @@ class Pool(object):
             # Check that all groups exist
             for group in groups:
                 assert registered_models.groups.has_key(group), "Group with name " +group+ " not found.\n Available groups: "+', '.join(registered_models.groups.keys())
-
         # Exclude models
         selected_groups = groups.difference(set(exclude))
-
         # Find models that meet the criteria
         for model, groups in registered_models.registered_models.iteritems():
-            if groups.issuperset(selected_groups):
+            if selected_groups.issuperset(groups):
                 self.selected_models.add(model)
-
 
 class PoolMPI(Pool):
     def __init__(self, **kwargs):
