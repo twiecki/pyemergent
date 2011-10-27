@@ -55,7 +55,7 @@ class Base(object):
 	self.plot_prefix_png = self.prefix + 'plots/png/' + self.__class__.__name__ + '_'
 	self.plot_prefix_eps = self.prefix + 'plots/eps/' + self.__class__.__name__ + '_'
 	self.plot_prefix_pdf = self.prefix + 'plots/pdf/' + self.__class__.__name__ + '_'
-	self.colors = ('r','b','g','y','c','k','m','w')
+	self.colors = ('k','r','b','y','c','g','m','w')
 
 	self.ddms = {}
 	self.ddms_results = {}
@@ -74,7 +74,7 @@ class Base(object):
             self.debug = debug
         else:
             self.debug = False
-            
+
 	# Check if logdir directory exists, if not, create it
 	if not os.path.isdir(self.log_dir):
             try:
@@ -87,6 +87,7 @@ class Base(object):
         an individual process for better multiprocessing."""
 	new_flag = {}
 	flags = []
+
 	for flag in self.flags:
             np.random.seed(31337)
 	    for batch in range(self.batches):
@@ -113,9 +114,9 @@ class Base(object):
 		# Append row with batch number in it
 		data_batches.append(data_ind)
 	    data[tag] = np.hstack([data_batch for data_batch in data_batches])
-		
+
 	return data
-    
+
     def load_logs(self, log_type=None):
 	"""Load logs of a certain log type (e.g. 'trl' or'cyc').
 	log_type<string> defaults to 'trl'."""
@@ -129,7 +130,7 @@ class Base(object):
     def load_logs_type(self, log_types):
 	"""Load logs of a multiple log types (e.g. ['trl','cyc']).
 	Arguments:
-	log_types<list>
+-	log_types<list>
 	"""
 	for log_type in log_types:
 	    self.data[log_type] = self._preprocess_logs(log_type)
@@ -139,11 +140,11 @@ class Base(object):
     def preprocess_data(self):
 	"""Base method. May be overloaded with preprocessing."""
 	pass
-    
+
     def analyze(self):
 	"""Base method. To be overloaded with your analyzes."""
 	pass
-    
+
     def new_fig(self, **kwargs):
         from pylab import figure, subplot
 	figure(**kwargs)
@@ -163,40 +164,27 @@ class Base(object):
 
     def fit_hddm(self, depends_on=None, plot=False, mcmc=False, **kwargs):
         import hddm
-        import pymc as pm
+        import hddm.sandbox
+        #from hddm.sandbox.model import HDDMSwitch
         # Remove outliers
-        model = hddm.HDDMAntisaccade(self.hddm_data[self.hddm_data['instruct']==1], depends_on=depends_on, is_group_model=False, no_bias=True, init=False, include=('T',), **kwargs)
-        if mcmc:
-            mc = pm.MCMC(model.create())
-            mc.sample(5000, burn=2000)
-            return mc
+        # [self.hddm_data['instruct']==1]
+        # Add depends_on for threshold in prosaccade trials
+        if depends_on.has_key('a'):
+            depends_on['a'].append('trial_type')
         else:
-            from operator import attrgetter
+            depends_on['a'] = 'trial_type'
 
-            for i in range(10):
-                maps.append(try_fit(model))
-
-            maps = sorted(maps, key=attrgetter('logp_at_max'))
-            print [map_.logp_at_max for map_ in maps]
-            #ranges = [(node.parents['lower'], node.parents['upper']) for node in map_.stochastics]
-            #print [node.__name__ for node in map_.stochastics]
-            #print ranges
-            #m = pm.MAP(model.create())
-            #m.fit()
-            #return m
-            #map_.fit(method='brute', ranges=((-2,0), (0,2), (0,0), (1,3), (.5,.5), (0,.5), (0,1.), (0,.5)), verbose=1, Ns=10)#, method='fmin_l_bfgs_b') #, iterlim=10, tol=1e-3)
-            #map_.fit(method='brute', ranges=ranges, verbose=1, Ns=4)#, method='fmin_l_bfgs_b') #, iterlim=10, tol=1e-3)
-            # Return best fitting model
-            return maps[-1]
-
-@pools.retry(4)
-def try_fit(model):
-    try:
-        m = pm.MAP(model.create())
-        m.fit()
-        return m
-    except e:
-        return False
+        model = hddm.sandbox.HDDMSwitch(self.hddm_data, depends_on=depends_on, is_group_model=False, init=False, **kwargs)
+        if mcmc:
+            model.sample(10000, burn=5000)
+            model.print_stats()
+            hddm.utils.plot_posteriors(model)
+            return model.mc
+        else:
+            map = model.map(runs=14)
+            for node in map.stochastics:
+                print "%s: %f" % (node.__name__, node.value)
+            return map
 
 class BaseCycle(Base):
     def __init__(self, **kwargs):
@@ -205,57 +193,64 @@ class BaseCycle(Base):
 
     def load_logs(self):
 	self.load_logs_type(['trl', 'cyc'])
-	
+
     def extract_cycles(self, tag, trl_cond, cyc_col_name, center=None, cycle=None, wind=(50,50)):
 	"""Extracts cycles of individual trials.
 	Trials can be specified by trl_cond. The data will be centered around
 	the col 'center' if it is supplied or around the cycle number if cycle is supplied."""
 
 	batches = self.data['trl'][tag][trl_cond]['batch']
-	epochs = self.data['trl'][tag][trl_cond]['epoch']
-	trials = self.data['trl'][tag][trl_cond]['trial']
-	
-	if cycle is not None:
-	    centers = np.ones(trials.shape) * cycle
-	elif center is not None:
-	    centers = self.data['trl'][tag][trl_cond][center]
-	else:
-	    raise ValueError, "You have to supply either cycle or center."
 
-	center_winds = []
+	center_winds_batch = []
+        center_winds = []
 
-	for batch, epoch, trial, center in zip(batches, epochs, trials, centers):
-	    # Select corresponding trial (uniquely identified by it's batch_num, epoch and trial
-	    data_cyc_idx = (self.data['cyc'][tag]['batch'] == batch) & \
-			   (self.data['cyc'][tag]['epoch'] == epoch) & \
-			   (self.data['cyc'][tag]['trial'] == trial)
-	    data_cyc_ind = self.data['cyc'][tag][data_cyc_idx]
-	    # Find the cycle index in which the response was made
-	    data_cyc_cent_idx = np.where(data_cyc_ind['cycle'] == center)[0]
+        for batch in np.unique(batches):
+            # Select data of this batch
+            data_batch = self.data['trl'][tag][trl_cond][self.data['trl'][tag][trl_cond]['batch'] == batch]
 
-	    ##############################################
-	    # Extract wind before and after this response
-	    ##############################################
-	    center_cycle = data_cyc_ind[data_cyc_cent_idx]['cycle'][0]
-	    max_cycles = np.max(data_cyc_ind['cycle'])
+            epochs = data_batch['epoch']
+            trials = data_batch['trial']
 
-	    # Detect if there is enough space to cut out the window around the response
-	    pre_buf = 0
-	    post_buf = wind[1]
-	    if center_cycle < wind[0]:
-		pre_buf = wind[0] - center_cycle
-	    if wind[1] > max_cycles - center_cycle:
-		post_buf = max_cycles - center_cycle
+            if cycle is not None:
+                centers = np.ones(trials.shape) * cycle
+            elif center is not None:
+                centers = data_batch[center]
+            else:
+                raise ValueError, "You have to supply either cycle or center."
 
-	    # How large the max window is allowed to be
-	    pre_wind = wind[0] - pre_buf
+            for epoch, trial, center_cyc in zip(epochs, trials, centers):
+                # Select corresponding trial (uniquely identified by it's batch_num, epoch and trial
+                data_cyc_idx = (self.data['cyc'][tag]['batch'] == batch) & \
+                               (self.data['cyc'][tag]['epoch'] == epoch) & \
+                               (self.data['cyc'][tag]['trial'] == trial)
+                data_cyc_ind = self.data['cyc'][tag][data_cyc_idx]
+                # Find the cycle index in which the response was made
+                data_cyc_cent_idx = np.where(data_cyc_ind['cycle'] == center_cyc)[0]
 
-	    # Actually copy over the corresponding window
-	    center_wind = np.zeros((np.sum(wind)+1))
-	    center_wind[pre_buf:wind[0]] = data_cyc_ind[data_cyc_cent_idx[0]-pre_wind:data_cyc_cent_idx[0]][cyc_col_name]
-	    center_wind[wind[0]:wind[0]+post_buf+1] = data_cyc_ind[data_cyc_cent_idx[0]:data_cyc_cent_idx[0]+post_buf+1][cyc_col_name]
+                ##############################################
+                # Extract wind before and after this response
+                ##############################################
+                center_cycle = data_cyc_ind[data_cyc_cent_idx]['cycle'][0]
+                max_cycles = np.max(data_cyc_ind['cycle'])
 
-	    center_winds.append(center_wind)
+                # Detect if there is enough space to cut out the window around the response
+                pre_buf = 0
+                post_buf = wind[1]
+                if center_cycle < wind[0]:
+                    pre_buf = wind[0] - center_cycle
+                if wind[1] > max_cycles - center_cycle:
+                    post_buf = max_cycles - center_cycle
+
+                # How large the max window is allowed to be
+                pre_wind = wind[0] - pre_buf
+
+                # Actually copy over the corresponding window
+                center_wind = np.zeros((np.sum(wind)+1))
+                center_wind[pre_buf:wind[0]] = data_cyc_ind[data_cyc_cent_idx[0]-pre_wind:data_cyc_cent_idx[0]][cyc_col_name]
+                center_wind[wind[0]:wind[0]+post_buf+1] = data_cyc_ind[data_cyc_cent_idx[0]:data_cyc_cent_idx[0]+post_buf+1][cyc_col_name]
+                center_winds_batch.append(center_wind)
+
+            center_winds.append(np.mean(center_winds_batch, axis=0))
 
 	return np.array(center_winds)
 
@@ -264,18 +259,17 @@ class BaseCycle(Base):
 
         if avg: # Plot average line
             y = np.mean(data, axis=0)
-            print data.shape
             if data.shape == (0,):
                 raise ValueError('Data array is empty.')
             if data.shape[1] != 0:
-                sem_ = sem(data, axis=0)
+                sem_ = np.std(data, axis=0)
                 plt.fill_between(x, y-sem_, y+sem_, alpha=.5, **kwargs)
             plt.plot(x, y, **kwargs)
-            
+
         else: # Plot all lines
             for y in data:
                 plt.plot(x, y, **kwargs)
-            
+
 
 def load_log(fname):
     dtype = convert_header_np(fname)
@@ -299,11 +293,11 @@ def convert_header_np(fname):
         line = f.readline()
 
     cols = line.split()
-    
+
     for i, col in enumerate(cols):
         prefix = col[0]
         name = col[1:]
-        
+
         if prefix == '|':
             # Int
             dt.append((name, 'float'))
@@ -352,7 +346,7 @@ def group(data, group_names):
             13.,  14.,  11.,  12.,  13.,  14.,  11.,  12.,  13.,  14.,  11.,
             12.,  13.,  14.,  11.,  12.,  13.,  14.])
     """
-    
+
     # Define Counter object to keep track of where we are
     class Counter(object):
         def __init__(self):
@@ -374,14 +368,14 @@ def group(data, group_names):
 
     # Call recursive grouping function
     group_rec(data, group_names, data_mean, data_sem, row_idx)
-    
+
     # Check if the arrays have been filled
     if row_idx.i < rows:
         # Delete empty rows and issue a warning
         print("WARNING: Not all groups generated, data incomplete?")
         data_mean = np.delete(data_mean, np.s_[row_idx.i:rows])
         data_sem = np.delete(data_sem, np.s_[row_idx.i:rows])
-        
+
     # Fix data_sem
     for name in group_names:
         data_sem[name] = data_mean[name]
@@ -396,7 +390,7 @@ def group_rec(data, group_names, data_mean, data_sem, row_idx):
 	for item in items:
 	    # Select those rows with the item
 	    rows_select = col == item
-            
+
             data_slice = data[rows_select,:]
 
 	    # Recursive call
@@ -430,7 +424,7 @@ def group_rec(data, group_names, data_mean, data_sem, row_idx):
 		    data_sem[name][row_idx.i] = 0
         row_idx.add()
         return
-    
+
 def group_batch(data, group_names):
     """Convience function for group which groups over batches first and
     then over group_names so that SEM values are group wise"""
@@ -468,8 +462,8 @@ def usage():
     --analyze (-a): Analyze the log files (after simulations have been run).
 
     """)
-    
-    
+
+
 def main():
     import getopt
     import pools
@@ -530,7 +524,7 @@ def main():
     else: # Run locally
         pool = pools.Pool(emergent_exe=emergent, prefix=prefix, debug=verbose)
         pool.select(groups, exclude=exclude)
-        pool.prepare(batches=batches)
+        pool.prepare(batches=batches, debug=verbose)
         if run:
             raise NotImplementedError, "Running locally not implemented."
         else:
@@ -539,5 +533,5 @@ def main():
 if __name__ == '__main__':
     #import doctest
     #doctest.testmod()
-    
+
     main()

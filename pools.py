@@ -26,7 +26,7 @@ import math
 # Retry decorator with exponential backoff
 def retry(tries, delay=3, backoff=2):
   """Retries a function or method until it returns True.
-  
+
   delay sets the initial delay, and backoff sets how much the delay should
   lengthen after each failure. backoff must be greater than 1, or else it
   isn't really a backoff. tries must be at least 0, and delay greater than
@@ -69,7 +69,7 @@ def analyze_locally(groups=None, batches=8):
     p._instantiate(batches=batches)
     p.analyze()
 
-    
+
 class Pool(object):
     def __init__(self, prefix=None, emergent_exe=None, analyze=True, debug=False):
         self.instantiated_models = []
@@ -83,6 +83,7 @@ class Pool(object):
     def queue_jobs(self):
         """Put jobs in the queue to be processed"""
         assert len(self.instantiated_models) != 0, "Insantiate models first by calling _instantiate()"
+
         for model in self.instantiated_models:
             split_jobs = model.split_batches()
             # Put jobs in queue
@@ -106,7 +107,7 @@ class Pool(object):
             model.load_logs()
             model.preprocess_data()
             model.analyze()
-            
+
     def select(self, groups=None, exclude=()):
         """Check if models are registered and instantiated. If not,
         register and instantiate them."""
@@ -121,14 +122,14 @@ class Pool(object):
         selected_groups = groups.difference(set(exclude))
         # Find models that meet the criteria
         for model, groups in registered_models.registered_models.iteritems():
-            if selected_groups.issuperset(groups):
+            if selected_groups.issuperset(groups) or groups.issuperset(selected_groups):
                 self.selected_models.add(model)
 
 class PoolMPI(Pool):
     def __init__(self, **kwargs):
         self.processes = []
         super(PoolMPI, self).__init__(**kwargs)
-            
+
     def start_jobs(self, run=True, analyze=True, groups=None, exclude=(), **kwargs):
         from mpi4py import MPI
 
@@ -141,7 +142,7 @@ class PoolMPI(Pool):
             self.mpi_controller(run=run, analyze=analyze, **kwargs)
         else:
             self.mpi_worker()
-        
+
     # MPI function for usage on cluster
     def mpi_controller(self, run=True, analyze=True, **kwargs):
 
@@ -150,7 +151,7 @@ class PoolMPI(Pool):
 
         if run and analyze:
             raise ValueError('Either run or analyze can be true. Call this function twice.')
-        
+
         if run:
             self.mpi_controller_run()
         if analyze:
@@ -158,7 +159,7 @@ class PoolMPI(Pool):
 
     def mpi_controller_run(self):
         from mpi4py import MPI
-        
+
         process_list = range(1, MPI.COMM_WORLD.Get_size())
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
@@ -171,6 +172,7 @@ class PoolMPI(Pool):
             print self.queue
         workers_done = []
         queue = iter(self.queue)
+
         self.pbar.maxval = len(self.queue)
         # Feed all queued jobs to the childs
         while(True):
@@ -205,7 +207,7 @@ class PoolMPI(Pool):
                         if self.debug:
                             print "Controller: Sending kill signal"
                         MPI.COMM_WORLD.send([], dest=status.source, tag=2)
-                        
+
 
             elif status.tag == 2: # Exit
                 process_list.remove(status.source)
@@ -225,11 +227,11 @@ class PoolMPI(Pool):
 
     def mpi_controller_analyze(self):
         from mpi4py import MPI
-        
+
         process_list = range(1, MPI.COMM_WORLD.Get_size())
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
-        
+
         counter = 0
 
         if self.debug:
@@ -269,7 +271,7 @@ class PoolMPI(Pool):
                 return True
 
         return False
-                
+
 
     def mpi_worker(self):
         try:
@@ -278,7 +280,7 @@ class PoolMPI(Pool):
             print "Failed to import matplotlib"
 
         from mpi4py import MPI
-        
+
         proc_name = MPI.Get_processor_name()
         status = MPI.Status()
         if self.debug:
@@ -294,7 +296,7 @@ class PoolMPI(Pool):
             recv = MPI.COMM_WORLD.recv(source=0, tag=MPI.ANY_TAG, status=status)
             if self.debug:
                 print "Worker %i on %s: received data, tag: %i" % (self.rank, proc_name, status.tag)
-            
+
             if status.tag == 2:
                 if self.debug:
                     print "Worker %i on %s: recieved kill signal" % (self.rank, proc_name)
@@ -320,11 +322,11 @@ class PoolMPI(Pool):
                 except Exception, err:
                     # Only log the error, but keep on processing jobs
                     sys.stderr.write("Worker %i on %s: ERROR: %s" % (self.rank, proc_name, str(err)))
-                    
+
             if self.debug:
                 print("Worker %i on %s: finished one job" % (self.rank, proc_name))
             MPI.COMM_WORLD.send([], dest=0, tag=10)
-    
+
         MPI.COMM_WORLD.send([], dest=0, tag=2)
 
 class RegisteredModels(object):
@@ -336,13 +338,13 @@ class RegisteredModels(object):
     #     """Register model so that it can be run automatically by
     #     calling the pools.run() function."""
     #     self.registered_models.add(model)
-        
+
     #     return model
-    
+
     def register_group(self, groups):
         def reg(model):
             self.registered_models[model] = set(groups)
-            
+
             for group in groups:
                 if not self.groups.has_key(group):
                     self.groups[group] = set()
@@ -420,7 +422,7 @@ def call_emergent(flags, prefix=None, silent=False, emergent_exe=None):
     if emergent_exe is None:
         emergent_call = prefix + ['/usr/bin/emergent','-nogui','-ni','-p'] + flags
     else:
-        emergent_call = prefix + [emergent_exe] + ['-nogui','-ni','-p'] + flags
+        emergent_call = [emergent_exe] + ['-nogui','-ni','-p'] + flags
 
     if silent:
         retcode = subprocess.call(emergent_call,
@@ -433,5 +435,5 @@ def call_emergent(flags, prefix=None, silent=False, emergent_exe=None):
     if retcode != 0:
         print retcode
         print prefix
-        
+
     return (retcode == 0)

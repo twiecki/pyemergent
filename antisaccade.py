@@ -1,5 +1,5 @@
 import numpy as np
-    
+
 from copy import copy
 
 try:
@@ -17,7 +17,7 @@ import pools
 import emergent
 
 from math import modf, floor
- 
+
 def quantize(x, bins=7):
     hist, limits = np.histogram(x, bins=bins)
     out = np.empty(7)
@@ -29,9 +29,9 @@ def quantize(x, bins=7):
         out[i] = np.mean(x[idx[-1]])
 
     return (out, np.asarray(idx))
-    
+
 class Saccade(emergent.Base):
-    def __init__(self, pre_trial_cue=True, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, max_epoch=50, task=None, **kwargs):
+    def __init__(self, pre_trial_cue=True, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, dlpfc_connectivity=False, max_epoch=50, task=None, **kwargs):
 	super(Saccade, self).__init__(**kwargs)
 
 	# Set ddm to have fixed starting point and that drift rate
@@ -39,16 +39,17 @@ class Saccade(emergent.Base):
 	#self.ddm_params['set'] = 'z 0.5'
 	#self.ddm_params['depends'] = 'v stimulus'
 	#self.ddm_params['format'] = 'RESPONSE TIME'
-	
+
 	self.width=.2
 	self.data_trial = {}
 	self.data_trial_idx = {}
 	self.tags = []
+        self.names = []
         if task is None:
             self.flag['task'] = 'SACCADE'
         else:
             self.flag['task'] = task
-            
+
         self.flag['motivational_bias'] = 'NO_BIAS'
         self.flag['LC_mode'] = 'phasic'
         self.flag['test_SSD_mode'] = 'false'
@@ -71,21 +72,24 @@ class Saccade(emergent.Base):
             self.flags[-1]['tag'] = '_' + self.tags[-1]
 
 	if SZ:
+            self.names.append('High\ntonic\nDA')
             self.flags.append(copy(self.flag))
 	    self.tags.append('Increased_tonic_DA')
 	    self.flags[-1]['tag'] = '_' + self.tags[-1]
-            self.flags[-1]['tonic_DA_intact'] = 0.04
+            self.flags[-1]['tonic_DA_intact'] = 0.032
 	    self.flags[-1]['SZ_mode'] = 'true'
 
 	if PD:
+            self.names.append('Low\ntonic\nDA')
             self.flags.append(copy(self.flag))
             self.tags.append('Decreased_tonic_DA')
 	    self.flags[-1]['tag'] = '_' + self.tags[-1]
 	    self.flags[-1]['SZ_mode'] = 'false'
-	    self.flags[-1]['tonic_DA_intact'] = 0.027
+	    self.flags[-1]['tonic_DA_intact'] = 0.029
 
         # if NE:
-        #     for tonic_NE in np.linspace(0,1,8):
+        #     for tonic_NE in np.linspace(0.3,.4,8):
+        #         self.names.append('NE\n%.2f' % tonic_NE)
         #         self.flags.append(copy(self.flag))
         #         self.tags.append('Tonic_NE_%f'%tonic_NE)
         #         self.flags[-1]['tag'] = '_' + self.tags[-1]
@@ -93,45 +97,48 @@ class Saccade(emergent.Base):
         #         self.flags[-1]['tonic_NE'] = tonic_NE
 
         if NE:
+            self.names.append('Tonic\nNE')
             self.flags.append(copy(self.flag))
             self.tags.append('Tonic_NE')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['LC_mode'] = 'tonic'
-            self.flags[-1]['tonic_NE'] = 0.4
+            self.flags[-1]['tonic_NE'] = 0.3
 
         if STN:
+            self.names.append('Reduced\nSTN-SNr\nconnectivity')
             self.flags.append(copy(self.flag))
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
-	    self.flags[-1]['tonic_DA_intact'] = 0.029
 	    self.flags[-1]['STN_lesion'] = .5
 
-            #self.flags.append(copy(self.flag))
-            #self.tags.append('DBS_on_pretrial')
-            #self.flags[-1]['tag'] = '_' + self.tags[-1]
-	    #self.flags[-1]['tonic_DA_intact'] = 0.029
-	    #self.flags[-1]['STN_lesion'] = .5
-            #self.flags[-1]['DLPFC_speed_mean_mod'] = .1
-
         if pretrial:
+            self.names.append('Prepotent')
             self.flags.append(copy(self.flag))
             self.tags.append('Pretrial')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['DLPFC_speed_mean_mod'] = .1
 
         if motivation:
+            self.names.append('Speed\nbias')
             self.flags.append(copy(self.flag))
             self.tags.append('Speed')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['motivational_bias'] = 'SPEED_BIAS'
 
+            self.names.append('Accuracy\nbias')
             self.flags.append(copy(self.flag))
             self.tags.append('Accuracy')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['motivational_bias'] = 'ACC_BIAS'
 
+        if dlpfc_connectivity:
+            self.names.append('Decreased\nDLPFC\nconnectivity')
+            self.flags.append(copy(self.flag))
+            self.tags.append('DLPFC_connectivity')
+            self.flags[-1]['tag'] = '_' + self.tags[-1]
+            self.flags[-1]['dlpfc_connectivity'] = -.4
 
-        
+
 	return
 	# SZ run + D1 antag
 	self.flag['tag'] = '_' + self.tags[2]
@@ -148,8 +155,8 @@ class Saccade(emergent.Base):
 	self.flags.append(copy(self.flag))
 
     def analyze(self):
-	self.plot_RT_histo()
-	self.save_plot("RT_histo")
+	#self.plot_RT_histo()
+	#self.save_plot("RT_histo")
 
         self.new_fig()
         self.plot_RT()
@@ -162,14 +169,14 @@ class Saccade(emergent.Base):
         self.new_fig()
         self.plot_error(inhibited_as_error=False)
         self.save_plot("error_no_inhib")
-        
+
         #self.new_fig()
         #self.plot_preSMA_act()
 
-        self.new_fig()
-        self.plot_RT_vs_accuracy()
-        self.save_plot("RT_vs_accuracy")
-        
+        #self.new_fig()
+        #self.plot_RT_vs_accuracy()
+        #self.save_plot("RT_vs_accuracy")
+
         return
 
 
@@ -202,7 +209,7 @@ class Saccade(emergent.Base):
 	ps_sem = data_sem[idx][name]
 
 	return (np.concatenate((ps_mean, as_mean)), np.concatenate((ps_sem, as_sem)))
-	    
+
 
     def quantize_cdf(self, data):
         # Select non-inhibited, correct trials.
@@ -228,11 +235,11 @@ class Saccade(emergent.Base):
         plt.ylabel('Accuracy (%)')
         plt.legend(loc=0, fancybox=True)
 
-            
+
     def plot_RT_delta(self):
         for i,tag in enumerate(self.tags):
             data = self.data[tag]
-    
+
             idx_corr = (data['inhibited']==0) & (data['error']==1) & (data['trial_name'] == '"Antisaccade"')
             idx_err = (data['inhibited']==0) & (data['error']==0) & (data['trial_name'] == '"Antisaccade"')
 
@@ -247,7 +254,7 @@ class Saccade(emergent.Base):
         plt.xlabel('Mean RT')
         plt.ylabel('Delta RT (cycles)')
         plt.legend(loc=0, fancybox=True)
-        
+
     def plot_RT(self):
 	for i,tag in enumerate(self.tags):
 	    data_mean, data_sem = emergent.group_batch(self.data[tag], ['trial_name', 'inhibited'])#, 'error'])
@@ -259,7 +266,7 @@ class Saccade(emergent.Base):
 	    plt.bar([0+i,.25+i], ordered_mean,
 		   yerr=ordered_sem,
 		   label=tag.replace("_", " "),
-		   width=self.width, color=self.colors[i], ecolor='k')
+		   width=self.width, color='.3')  #self.colors[i], ecolor='k')
 	    plt.title('Pro/Antisaccade: RTs')
 	    plt.ylabel('RTs (cycles)')
 	    plt.xlabel('Task Condition')
@@ -270,6 +277,32 @@ class Saccade(emergent.Base):
 	plt.legend(loc=0, fancybox=True)
 
     def plot_error(self, inhibited_as_error=False):
+        tags = self.tags[1:]
+        base_mean, base_sem = emergent.group_batch(self.data['intact'], ['trial_name'])
+        ordered_mean_base, dummy = self.select_ps_as(base_mean, base_sem, 'error')
+
+	for i,(tag,name) in enumerate(zip(tags,self.names)):
+            if inhibited_as_error:
+                data_mean, data_sem = emergent.group_batch(self.data[tag], ['trial_name'])
+            else:
+                data_mean, data_sem = emergent.group_batch(self.data[tag], ['trial_name', 'inhibited'])
+                idx = data_mean['inhibited'] == 0
+                data_mean = data_mean[idx]
+                data_sem = data_sem[idx]
+
+	    ordered_mean, ordered_sem = self.select_ps_as(data_mean, data_sem, 'error')
+    	    plt.bar(i-.5, ordered_mean[1] - ordered_mean_base[1],
+		   yerr=ordered_sem[1],
+		   label=name, color='.3', ecolor='k')  # self.colors[i], ecolor='k')
+
+        plt.title('Pro/Antisaccade: Errors')
+        plt.ylabel('Average error relative to intact')
+        plt.xlabel('Task Condition')
+
+        plt.xticks(range(len(self.names)), self.names) #np.linspace(0.5,len(self.tags),len(self.tags)-.5), self.tags)
+
+
+    def plot_error_obsolete(self, inhibited_as_error=False):
 	for i,tag in enumerate(self.tags):
             if inhibited_as_error:
                 data_mean, data_sem = emergent.group_batch(self.data[tag], ['trial_name'])
@@ -278,7 +311,7 @@ class Saccade(emergent.Base):
                 idx = data_mean['inhibited'] == 0
                 data_mean = data_mean[idx]
                 data_sem = data_sem[idx]
-                
+
 	    ordered_mean, ordered_sem = self.select_ps_as(data_mean, data_sem, 'error')
 	    #idx = data_mean['inhibited'] == 0
     	    plt.bar([0+i,.25+i], ordered_mean,
@@ -306,7 +339,7 @@ class Saccade(emergent.Base):
 	    plt.xlabel('Task Condition')
 	    plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
 	    plt.xlim((-0.05,.5+i))
-    
+
     def plot_preSMA_act(self):
         for i,tag in enumerate(self.tags):
             data_mean, data_sem = emergent.group_batch(self.data[tag], ['trial_name'])
@@ -320,7 +353,7 @@ class Saccade(emergent.Base):
             plt.xlabel('Task Condition')
 	    plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
 	    plt.xlim((-0.05,.5+i))
-            
+
 
     def plot_RT_histo(self, bins=75, range=(0,200), save=True, grid=True, cutoff=None, pro=False):
         if pro:
@@ -362,7 +395,7 @@ class Saccade(emergent.Base):
                 idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0) & (data['minus_cycles'] > cutoff)
             else:
                 idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0)
-                
+
 	    histo = np.histogram(data['minus_cycles'][idx],
 				 bins=bins, range=range)
 	    y = histo[0]
@@ -423,7 +456,7 @@ class SaccadeNE(Saccade):
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, pretrial=False, max_epoch=50, **kwargs)
+	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, pretrial=False, dlpfc_connectivity=True, max_epoch=50, **kwargs)
 
 
 @pools.register_group(['flanker', 'pretrial', 'nocycle'])
@@ -449,14 +482,14 @@ class SaccadeDDMBase(Saccade):
         else:
             self.mcmc = kwargs['mcmc']
             del kwargs['mcmc']
-            
+
         super(SaccadeDDMBase, self).__init__(pre_trial_cue=True, intact=False, **kwargs)
         if not kwargs.has_key('depends'):
             self.depends = ['a', 'v', 'v_switch', 't_switch']
         else:
             self.depends = kwargs['depends']
 
-        
+
     def set_flags_condition(self, condition, start, stop, samples, tag=None):
         self.x = np.linspace(start, stop, samples)
         self.condition = condition
@@ -497,11 +530,12 @@ class SaccadeDDMBase(Saccade):
             self.subj_idx[tag] = np.copy(data['batch'])
             self.tags_array[tag] = np.empty(data.shape[0], dtype='S32')
             self.tags_array[tag][:] = tag
-            
+
 	    self.rt[tag] = np.copy(data['minus_cycles'])/norm
 
         # Create array with data across tags (tag becomes stimulus)
         self.stimulus_all = np.hstack([self.stimulus[tag]=='"Antisaccade"' for tag in self.tags])
+        self.stimulus_name_all = np.hstack([self.stimulus[tag] for tag in self.tags])
         self.response_all = np.hstack([self.response[tag] for tag in self.tags])
         # Flip responses for prosaccades (coding is "reversed" for pro and antisaccades)
         self.response_all[self.stimulus_all=='"Prosaccade"'] = 1-self.response_all[self.stimulus_all=='"Prosaccade"']
@@ -512,11 +546,11 @@ class SaccadeDDMBase(Saccade):
 
         dtype = np.dtype([('instruct',np.int16), ('response', np.int16),
                           ('rt', np.float), ('subj_idx', np.int16),
-                          ('dependent', 'S32')])
+                          ('dependent', 'S32'), ('trial_type', 'S32')])
 
         self.hddm_data = np.rec.fromarrays([self.stimulus_all, self.response_all, self.rt_all,
-                                            self.subj_idx_all, self.tags_array_all], dtype=dtype)
-        
+                                            self.subj_idx_all, self.tags_array_all, self.stimulus_name_all], dtype=dtype)
+
         # Create tag array with tag names for every line in *_all variables
         self.tag_all = np.hstack([tag for tag in self.tags for stimulus in self.stimulus[tag]])
 
@@ -524,24 +558,20 @@ class SaccadeDDMBase(Saccade):
         self.plot_RT_histo()#(cutoff=50)
         self.save_plot('RT_histo')
 
-        self.plot_hddm_fit(plot_fit=False)
-            #self.plot_RT_histogram(saccade='pro')#(cutoff=50)
-            #self.save_plot('RT_histogram_pro')
-
-            #self.plot_var('error')
-            #self.plot_var('error', inhibited_as_error=True)
-
         if self.fit_ddm:
+            # Fitting DDM
+            print "Fitting DDM."
             self.new_fig()
             self.fit_and_analyze_ddm()
-            
+
             self.new_fig()
             self.plot_param_influences()
 
             self.plot_hddm_fit()
+        else:
+            self.plot_hddm_fit(plot_fit=False)
 
-
-    def plot_hddm_fit(self, range_=(-6., 6.), bins=150., plot_fit=True, mcmc=False):
+    def plot_hddm_fit(self, range_=(-4., 4.), bins=150., plot_fit=True):
         import hddm
         x = np.linspace(range_[0], range_[1], 200)
         test_params = ('v', 'v_switch', 'a', 't_switch')
@@ -552,9 +582,15 @@ class SaccadeDDMBase(Saccade):
             plt.figure()
             for j, dep_val in enumerate(self.x):
                 param_vals = {}
-                tag = "%s('%s_%.4f',)" %(test_param, self.condition, dep_val)
+                if test_param == 'a':
+                    tag = "%s('%s_%.4f', \'\"Antisaccade\"\')" %(test_param, self.condition, dep_val)
+                    dep_tag = '%s_%.4f'%(self.condition, dep_val)
+                else:
+                    tag = "%s('%s_%.4f',)" %(test_param, self.condition, dep_val)
+                    dep_tag = '%s_%.4f'%(self.condition, dep_val)
+
                 plt.subplot(3,3,j+1)
-                dep_tag = '%s_%.4f'%(self.condition, dep_val)
+
                 data = self.hddm_data[(self.hddm_data['dependent']==dep_tag) & (self.hddm_data['instruct']==1)]
                 data = hddm.utils.flip_errors(data)
                 print "%s: %f" %(tag, np.mean(data['rt']<0))
@@ -563,40 +599,42 @@ class SaccadeDDMBase(Saccade):
                 hist = hddm.utils.histogram(data['rt'], bins=bins, range=range_,
                                             density=True)[0]
                 plt.plot(np.linspace(range_[0], range_[1], bins), hist)
-                
+
                 # Plot fit
                 if plot_fit:
                     fitted_params = self.hddm_models[test_param]._dict_container
                     for param in params:
                         if param == test_param:
-                            if mcmc:
-                                param_vals[param] = np.mean(fitted_params[tag+'_root'].trace())
+                            if self.mcmc:
+                                param_vals[param] = np.mean(fitted_params[tag+'_group'].trace())
                             else:
-                                param_vals[param] = fitted_params[tag+'_root'].value
+                                param_vals[param] = fitted_params[tag+'_group'].value
                         else:
-                            if mcmc:
-                                param_vals[param] = np.mean(fitted_params[param+'_root'].trace())
+                            param_name = param+'_group'
+                            if param == 'a':
+                                param_name = 'a(\'"Antisaccade"\',)_group'
+                            if self.mcmc:
+                                param_vals[param] = np.mean(fitted_params[param_name].trace())
                             else:
-                                param_vals[param] = fitted_params[param+'_root'].value
+                                param_vals[param] = fitted_params[param_name].value
                         param_vals['V_switch'] = 0
 
-                    print tag
                     for name, param in sorted(param_vals.items()):
                         print "%s: %f"%(name, param)
 
                     fit = hddm.likelihoods.wfpt_switch.pdf(x, param_vals['v'], param_vals['v_switch'], param_vals['V_switch'], param_vals['a'], .5, param_vals['t'], param_vals['t_switch'], param_vals['T'])
                     plt.plot(x, fit)
-                
+
                 plt.title(tag)
-                
+
             if not plot_fit:
                 # Bail, no need to replot the same thing
                 self.save_plot('hddm_fit')
                 return
-                    
+
 
             self.save_plot('hddm_fit_%s'%test_param)
-        
+
 
     def fit_and_analyze_ddm(self, retry=False):
         import pymc as pm
@@ -605,23 +643,9 @@ class SaccadeDDMBase(Saccade):
         test_params = ['a', 'v', 'v_switch', 't_switch']
 
         for test_param in test_params:
-            failed = True
-            if retry:
-                while(failed):
-                    try:
-                        self.hddm_models[test_param] = self.fit_hddm(depends_on={test_param:['dependent']}, mcmc=self.mcmc)
-                        failed=False
-                    except pm.ZeroProbability:
-                        print "Fitting of %s model failed" % test_param
-            else:
-                self.hddm_models[test_param] = self.fit_hddm(depends_on={test_param:['dependent']}, mcmc=self.mcmc)
+            self.hddm_models[test_param] = self.fit_hddm(depends_on={test_param:['dependent']}, mcmc=self.mcmc)
 
-        #try:
-        #    self.hddm_models['none'] = self.fit_hddm(depends_on={})
-        #except pm.ZeroProbability:
-        #    print "Fitting of simple model failed."
-
-        plt.subplot(211)
+        #plt.subplot(211)
         plt.plot([self.hddm_models[test_param].logp for test_param in test_params], lw=self.lw)
         plt.ylabel('logp')
         plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
@@ -629,20 +653,17 @@ class SaccadeDDMBase(Saccade):
         #    plt.axhline(self.hddm_models['none'].logp)
         plt.title('HDDM model fits for different varying parameters')
 
-        plt.subplot(212)
-        if self.mcmc:
-            plt.plot([self.hddm_models[test_param].DIC for test_param in test_params], lw=self.lw)
-            #if self.hddm_models.has_key('none'):
-            #    plt.axhline(self.hddm_models['none'].DIC)
-        else:
-            plt.plot([self.hddm_models[test_param].BIC for test_param in test_params], lw=self.lw)
-            #if self.hddm_models.has_key('none'):
-            #    plt.axhline(self.hddm_models['none'].BIC)
-        plt.ylabel('BIC')
-        plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
-        plt.title('HDDM model fits for different varying parameters')
+        #plt.subplot(212)
+        #if self.mcmc:
+        #    plt.plot([self.hddm_models[test_param].DIC for test_param in test_params], lw=self.lw)
+        #    plt.ylabel('DIC')
+        #else:
+        #    plt.plot([self.hddm_models[test_param].BIC for test_param in test_params], lw=self.lw)
+        #    plt.ylabel('BIC')
+        #plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
+        #plt.title('HDDM model fits for different varying parameters')
         self.save_plot('model_probs')
-        
+
 
     def plot_param_influences(self):
         test_params = ['a', 'v', 'v_switch', 't_switch']
@@ -653,11 +674,14 @@ class SaccadeDDMBase(Saccade):
             yerr = []
             if self.condition == 'SpeedAcc':
                 for x in ['accuracy','speed']:
-                    tag = "%s('%s',)_root" %(test_param, x)
+                    tag = "%s('%s',)_group" %(test_param, x)
                     y.append(self.hddm_models[test_param]._dict_container[tag].value)
             else:
                 for x in self.x:
-                    tag = "%s('%s_%.4f',)_root" %(test_param, self.condition, x)
+                    if test_param == 'a':
+                        tag = "%s('%s_%.4f', \'\"Antisaccade\"\')_group" %(test_param, self.condition, x)
+                    else:
+                        tag = "%s('%s_%.4f',)_group" %(test_param, self.condition, x)
                     y.append(self.hddm_models[test_param]._dict_container[tag].value)
                     #yerr.append(self.hddm_models[test_param].params_est_std[tag])
             plt.subplot(2,2,i+1)
@@ -675,7 +699,7 @@ class SaccadeDDMBase(Saccade):
             else:
                 data_mean, data_sem = emergent.group(self.data[tag], ['trial_name', 'inhibited'])
                 idx = (data_mean['trial_name'] == '"Antisaccade"') & (data_mean['inhibited'] == 0)
-                
+
             if np.all(idx == False):
                 values.append(1.)
             else:
@@ -683,7 +707,7 @@ class SaccadeDDMBase(Saccade):
             #params.append(self.ddm.params[param+"_"+tag])
 
         plt.plot(self.x, values, 'o')
-        
+
 @pools.register_group(['DDM', 'DLPFC', 'nocycle', 'mean'])
 class SaccadeDDMDLPFC_mean(SaccadeDDMBase):
     def __init__(self, start=-0.05, stop=0.05, samples=6, **kwargs):
@@ -713,7 +737,15 @@ class SaccadeDDMSpeedAcc(SaccadeDDMBase):
 
         self.x = [0,1]
         self.condition = 'SpeedAcc'
-        
+
+@pools.register_group(['DDM', 'pro_anti'])
+class SaccadeDDMpro_anti(SaccadeDDMBase):
+    def __init__(self, **kwargs):
+        super(SaccadeDDMpro_anti, self).__init__(**kwargs)
+        self.tags.append('intact')
+        self.flag['tag'] = '_' + self.tags[-1]
+        self.flags.append(copy(self.flag))
+
 #@pools.register_group(['saccade', 'DDM', 'thalam', 'nocycle'])
 class SaccadeDDMThalam(SaccadeDDMBase):
     def __init__(self, start=0.65, stop=.8, samples=5, **kwargs):
@@ -769,7 +801,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 
         if task is None:
             task = 'SACCADE'
-            
+
 	self.tags = ['intact']
         self.flag['max_epoch'] = 50
         self.flag['task'] = task
@@ -781,9 +813,9 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	self.flag['tag'] = '_' + self.tags[-1]
 	self.flags.append(copy(self.flag))
 
-        self.tags.append('NE_tonic')
-        self.flag['tag'] = '_' + self.tags[-1]
-	self.flags.append(copy(self.flag))
+        #self.tags.append('NE_tonic')
+        #self.flag['tag'] = '_' + self.tags[-1]
+	#self.flags.append(copy(self.flag))
         self.lw = 2
         self.thalam_thresh = 0.8
 
@@ -807,7 +839,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         self.new_fig()
         self.analyse_SC_act()
         self.save_plot('SC_act')
-        
+
 	#self.new_fig()
 	#self.analyse_preSMA_act_anti_pro()
 	#self.save_plot("preSMA_act_pro_anti")
@@ -856,7 +888,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
                 idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0) & (data['minus_cycles'] > cutoff)
             else:
                 idx = (data['trial_name'] == saccade) & (data['error'] == 1.0) & (data['inhibited'] == 0)
-                
+
 	    histo = np.histogram(data['minus_cycles'][idx],
 				 bins=bins, range=range)
 	    y = histo[0]
@@ -877,7 +909,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
     def analyse_AS_correct_error(self, column, wind, cycle=None, center=None, tag=None):
         if tag is None:
             tag = 'intact'
-            
+
         data = self.data['trl'][tag]
 
         AS_corr = self.extract_cycles(
@@ -889,7 +921,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             wind=wind,
             cycle=cycle,
             center=center)
-        
+
         AS_err = self.extract_cycles(
             'intact',
             ((data['trial_name'] == '"Antisaccade"') &
@@ -905,7 +937,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
     def analyse_PS_AS(self, column, wind, cycle=None, center=None, tag=None):
         if tag is None:
             tag = 'intact'
-            
+
         data = self.data['trl'][tag]
 
         PS = self.extract_cycles(
@@ -933,7 +965,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
     def analyse_PS_AS_left_right(self, column, wind, cycle=None, center=None, tag=None):
         if tag is None:
             tag = 'intact'
-            
+
         data = self.data['trl'][tag]
 
         PS_left = self.extract_cycles(
@@ -990,9 +1022,9 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         preSMA_PS, preSMA_AS = self.analyse_PS_AS('Motor__acts_avg', wind=wind, center='minus_cycles')
 
 	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='g')
-        self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='r')
-        self.plot_filled(x, preSMA_PS, label="Prosaccade", color='b')
+        self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='r')
+        self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='b')
+        self.plot_filled(x, preSMA_PS, label="Prosaccade", color='k')
 	plt.xlabel('Cycles around response')
 	plt.ylabel('Average pre-SMA activity')
 	plt.title('pre-SMA activity during pro- and anti-saccades')
@@ -1006,9 +1038,9 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         preSMA_PS, preSMA_AS = self.analyse_PS_AS('ACC_act', wind=wind, center='minus_cycles', tag=tag)
 
 	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='g')
-        self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='r')
-        self.plot_filled(x, preSMA_PS, label="Prosaccade", color='b')
+        self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='r')
+        self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='b')
+        self.plot_filled(x, preSMA_PS, label="Prosaccade", color='k')
 	plt.xlabel('Cycles around response')
 	plt.ylabel('Average ACC activity')
 	plt.title('ACC activity during pro- and anti-saccades')
@@ -1034,17 +1066,17 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         cycle = 0
         thalam_AS_corr, thalam_AS_corr_err = self.analyse_AS_correct_error('Thalam_unit_corr', wind=wind, cycle=cycle)#center='minus_cycles')
         thalam_AS_incorr, thalam_AS_incorr_err = self.analyse_AS_correct_error('Thalam_unit_incorr', wind=wind, cycle=cycle)#center='minus_cycles')
-        
+
 	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        self.plot_filled(x, thalam_AS_corr, color='g', label="Correct_exec")
-        self.plot_filled(x, thalam_AS_corr_err, color='b', label="Correct_not_exec")
-        self.plot_filled(x, thalam_AS_incorr, color='c', label="Error_not_exec")
-        self.plot_filled(x, thalam_AS_incorr_err, color='r', label="Error_exec")
+        self.plot_filled(x, thalam_AS_corr, color='g', label="correct + executed")
+        self.plot_filled(x, thalam_AS_corr_err, color='b', label="correct + not executed")
+        self.plot_filled(x, thalam_AS_incorr, color='c', label="error + not executed")
+        self.plot_filled(x, thalam_AS_incorr_err, color='r', label="error + executed")
 
 	plt.xlabel('Cycles around antisaccade reponse')
 	plt.ylabel('Average SC activity')
 	plt.title('SC activity during antisaccades and antisaccade errors')
-	plt.legend(loc=2)
+	plt.legend(loc=0)
         plt.axhline(y=self.thalam_thresh, color='k')
 
     def analyse_STN_act(self):
@@ -1055,19 +1087,19 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         STN_PS, STN_AS = self.analyse_PS_AS('STN_acts_avg', wind=wind, cycle=0) #center='minus_cycles')
 
 	x=np.linspace(cycle-wind[0],cycle+wind[1],np.sum(wind)+1)
-        self.plot_filled(x, STN_AS_corr, label="Antisaccade Correct", color='g')
-        self.plot_filled(x, STN_AS_err, label="Antisaccade Error", color='r')
+        self.plot_filled(x, STN_AS_corr, label="Antisaccade Correct", color='r')
+        self.plot_filled(x, STN_AS_err, label="Antisaccade Error", color='0.75')
         self.plot_filled(x, STN_PS, label="Prosaccade", color='b')
 	plt.xlabel('Cycles around response')
 	plt.ylabel('Average STN activity')
 	plt.title('STN activity during successfully and erronous antisaccades')
 	plt.legend(loc=0, fancybox=True)
 
-        
+
     def analyse_Go_NoGo_left_right(self):
         wind = (150,150)
         center = 'minus_cycles'
-        
+
         Go_PS_left_left, Go_PS_left_right, Go_AS_left_left, Go_AS_left_right = self.analyse_PS_AS_left_right('left_Go', wind=wind, center=center)
         Go_PS_right_left, Go_PS_right_right, Go_AS_right_left, Go_AS_right_right = self.analyse_PS_AS_left_right('right_Go', wind=wind, center=center)
 
@@ -1085,7 +1117,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             plt.legend(loc=0)
         except ValueError:
             pass
-                
+
 
         plt.subplot(222)
         try:
@@ -1134,7 +1166,7 @@ class FlankerCycle(SaccadeBaseCycle):
     def analyze(self):
         self.plot_RT_histo()
 	self.save_plot("RT_histo")
-        
+
 	self.new_fig()
 	self.analyse_preSMA_act()
 	self.save_plot("preSMA_act")
@@ -1175,8 +1207,3 @@ class FlankerCycle(SaccadeBaseCycle):
 class SaccadeCyclePreTrial(SaccadeBaseCycle):
     def __init__(self, **kwargs):
         super(SaccadeCyclePreTrial, self).__init__(pre_trial_cue=True, **kwargs)
-
-
-
-
-
