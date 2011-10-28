@@ -412,6 +412,9 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
         self.SC_thr = .85
 
 
+        for flag_id in range(len(self.flags)):
+            self.flags[flag_id]['log_cycles'] = True
+
 	#self.flag['tag'] = '_' + self.tags[1]
 	#self.flag['staircase_mode'] = False
         #self.flag['test_SSD_mode'] = True
@@ -483,13 +486,14 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
         data_grp_mean, data_grp_sem = emergent.group_batch(self.data['trl'][tag], ['SS_presented'])
 
         idx = data_grp_mean['SS_presented'] == 1
-        SSD = self.data_settled[tag]['SSD'].mean()
+        SSD = np.median(self.data_settled[tag]['SSD'])
 
         thalam_ss_resp = self.extract_cycles(
             tag,
             ((self.data['trl'][tag]['SS_presented'] == 1) &
              (self.data['trl'][tag]['inhibited'] == 0) &
-             (self.data['trl'][tag]['epoch'] > 30)),
+             (self.data['trl'][tag]['epoch'] > 30) &
+             (self.data['trl'][tag]['SSD'] == SSD)),
             'Thalam_unit_corr', cycle=start_cycle,
             #center='SSD',
             wind=wind)
@@ -498,7 +502,8 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
             tag,
             ((self.data['trl'][tag]['SS_presented'] == 1) &
              (self.data['trl'][tag]['inhibited'] == 1) &
-             (self.data['trl'][tag]['epoch'] > 30)),
+             (self.data['trl'][tag]['epoch'] > 30) &
+             (self.data['trl'][tag]['SSD'] == SSD)),
             'Thalam_unit_corr', cycle=start_cycle,
             #center='SSD',
             wind=wind)
@@ -514,7 +519,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
         #plt.axvline(x=np.mean(self.SSD['intact'])+np.mean(self.SSRT['intact']), color='k')
         #plt.axvline(x=np.mean(self.SSD['intact']), color='k')
         plt.axvline(x=SSD, color='k')
-        plt.axvline(x=SSD + np.mean(self.SSRT['intact']), color='k')
+        plt.axvline(x=SSD + np.mean(self.SSRT[tag]), color='k')
 
         plt.xlabel('Cycles')
         plt.ylabel('Average SC activity')
@@ -604,7 +609,8 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 
         if tag is None:
             tag = 'intact'
-	wind=(0,150)
+	wind = (0, 150)
+        cycle = 20
 	STN_ss_pre_none = self.extract_cycles(
 	    tag,
 	    ((self.data['trl'][tag]['SS_presented'] == 0) &
@@ -612,7 +618,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 	     (self.data['trl'][tag]['inhibited'] == 0)),
             nuc_tag,
 	    #center='SSD',
-            cycle=0,
+            cycle=cycle,
 	    wind=wind)
 
 	STN_ss_pre_ss = self.extract_cycles(
@@ -622,10 +628,10 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 	     (self.data['trl'][tag]['inhibited'] == 0)),
 	    nuc_tag,
 	    #center='SSD',
-            cycle=0,
+            cycle=cycle,
 	    wind=wind)
 
-	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
+	x=np.linspace(-wind[0]+cycle,wind[1]+cycle,np.sum(wind)+1)
         self.plot_filled(x, STN_ss_pre_none, label='previous Go trial', color='g')
         self.plot_filled(x, STN_ss_pre_ss, label='previous Stop trial', color='r')
 #	plt.plot(x, np.mean(STN_ss_Go, axis=0))
@@ -691,5 +697,39 @@ class StopSignal_cycle_post2(StopSignal_cycle):
     def __init__(self, **kwargs):
         super(StopSignal_cycle_post2, self).__init__(**kwargs)
 
-        for flag in self.flags:
-	    flag['STN_lesion'] = -1.
+
+        for flag_id in range(len(self.flags)):
+            self.flags[flag_id]['thalam_inhib'] = 1.
+            #self.flags[flag_id]['proj'] = self.prefix+self.proj + '_sc.proj'
+
+@pools.register_group(['stopsignal', 'cycle', 'sc'])
+class StopSignal_cycle_SC(StopSignal_cycle):
+    def __init__(self, **kwargs):
+        super(StopSignal_cycle_SC, self).__init__(**kwargs)
+
+        self.flags = []
+        self.tags = []
+        # for a_thr in np.linspace(0.5,.85,5):
+        #     for b_inc_dt in np.linspace(0,.3,10):
+        #         self.flags.append(copy(self.flag))
+        #         self.tags.append('%.3f:%.3f'%(a_thr, b_inc_dt))
+        #         self.flags[-1]['tag'] = '_' + self.tags[-1]
+        #         self.flags[-1]['a_thr'] = a_thr
+        #         self.flags[-1]['b_inc_dt'] = b_inc_dt
+
+        a_thr = 0.588
+        b_inc_dt = 0.033
+        self.flags.append(copy(self.flag))
+        self.tags.append('%.3f:%.3f'%(a_thr, b_inc_dt))
+        self.flags[-1]['tag'] = '_' + self.tags[-1]
+        self.flags[-1]['a_thr'] = a_thr
+        self.flags[-1]['b_inc_dt'] = b_inc_dt
+
+    def analyze(self):
+        for tag in self.tags:
+            self.new_fig()
+            try:
+                self.analyze_SC_act_avg(tag=tag)
+            except ValueError:
+                continue
+            self.save_plot('sc_%s'%tag)

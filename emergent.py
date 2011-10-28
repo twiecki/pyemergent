@@ -250,7 +250,10 @@ class BaseCycle(Base):
                 center_wind[wind[0]:wind[0]+post_buf+1] = data_cyc_ind[data_cyc_cent_idx[0]:data_cyc_cent_idx[0]+post_buf+1][cyc_col_name]
                 center_winds_batch.append(center_wind)
 
-            center_winds.append(np.mean(center_winds_batch, axis=0))
+            if len(np.unique(batches)) == 1:
+                center_winds = center_winds_batch
+            else:
+                center_winds.append(np.mean(center_winds_batch, axis=0))
 
 	return np.array(center_winds)
 
