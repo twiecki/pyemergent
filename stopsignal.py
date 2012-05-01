@@ -53,6 +53,8 @@ class StopSignalBase(emergent.Base):
 	self.resp_ss_data = {}
 	self.resp_go_data = {}
 
+        self.ms = 4.
+
 	self.pt_code = {0: 'Go trial',
 			#1: 'GoTrial_noresp',
 			1: 'SS inhib',
@@ -98,7 +100,7 @@ class StopSignalBase(emergent.Base):
         #         self.flags[-1]['tonic_NE'] = tonic_NE
 
         if NE:
-            self.names.append('tonic\nNE\nact.')
+            self.names.append('tonic\nNE\nact')
             self.flags.append(copy(self.flag))
             self.tags.append('Tonic_NE')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
@@ -106,13 +108,13 @@ class StopSignalBase(emergent.Base):
             self.flags[-1]['tonic_NE'] = 0.3
 
         if motivation:
-            self.names.append('$\uparrow$tonic\nrIFG\nact.')
+            self.names.append('$\uparrow$tonic\nrIFG\nact')
             self.flags.append(copy(self.flag))
             self.tags.append('Accuracy')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
             self.flags[-1]['motivational_bias'] = 'ACC_BIAS'
 
-            self.names.append('$\uparrow$preSMA-\nstriatum\nconnect.')
+            self.names.append('$\uparrow$preSMA-\nstriatum\ncons')
             self.flags.append(copy(self.flag))
             self.tags.append('Speed')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
@@ -120,14 +122,14 @@ class StopSignalBase(emergent.Base):
 
 
         if IFG:
-            self.names.append('$\downarrow$IFG-\nSTN\nconnect.')
+            self.names.append('$\downarrow$IFG-\nSTN\ncons')
             self.flags.append(copy(self.flag))
             self.tags.append('IFG_lesion')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
-            self.flags[-1]['IFG_lesion'] = .5
+            self.flags[-1]['IFG_lesion'] = .4
 
         if STN:
-            self.names.append('$\downarrow$STN-\nSNr\nconnect.')
+            self.names.append('$\downarrow$STN-\nSNr\ncons')
             self.flags.append(copy(self.flag))
             self.tags.append('DBS_on')
             self.flags[-1]['tag'] = '_' + self.tags[-1]
@@ -172,11 +174,11 @@ class StopSignalBase(emergent.Base):
             self.response_prob[tag].append(prob)
 
             self.data_settled[tag].append(data[b_idx][cutoff:])
-            self.b_data[tag].append(data[b_idx][cutoff:])
+            self.b_data[tag].append(data[b_idx])
 
             # Slice out trials in which a response was made
-            resp_idx = self.b_data[tag][-1]['inhibited'] == 0
-            self.resp_data[tag].append(self.b_data[tag][-1][resp_idx])
+            resp_idx = self.data_settled[tag][-1]['inhibited'] == 0
+            self.resp_data[tag].append(self.data_settled[tag][-1][resp_idx])
 
             # Slice out trials in which a response was made and no SS was presented
             resp_noss_idx = (self.resp_data[tag][-1]['SS_presented'] == 0) & (self.resp_data[tag][-1]['prev_trial_code'] == 0)
@@ -220,19 +222,19 @@ class StopSignalBase(emergent.Base):
 
 
     def plot_staircase(self):
-	for t,tag in enumerate(self.tags):
+	for t,(tag, color) in enumerate(zip(self.tags, ['k', '.7'])):
 	    # Plot staircase
 	    for b_idx, b_data in enumerate(self.b_data[tag]):
 		if b_idx == 0: # If first, add label
-		    plt.plot(b_data['SSD'], color=self.colors[t], label=self.names[t])
+		    plt.plot(b_data['SSD'], color=color, label=self.names[t])
 		else:
 		    #break
-		    plt.plot(b_data['SSD'], color=self.colors[t])
-		plt.title('Staircases')
-		plt.xlabel('Trials')
-		plt.ylabel('SSD')
-		leg = plt.legend(loc='best', fancybox=True)
-		leg.get_frame().set_alpha(.5)
+		    plt.plot(b_data['SSD'], color=color)
+		#plt.title('Staircases')
+		plt.xlabel('Trial')
+		plt.ylabel('SSD (ms)')
+		leg = plt.legend(loc='best', frameon=False)
+		#leg.get_frame().set_alpha(.5)
 
     def plot_seq_effects(self):
 	for t,tag in enumerate(self.tags):
@@ -241,13 +243,13 @@ class StopSignalBase(emergent.Base):
 	    # Select those where a response was made and no stop signal was presented
 	    idx = (data_mean['inhibited'] == 0.0) & (data_mean['SS_presented'] == 0.0) & ((data_mean['prev_trial_code'] != 1) )
             #data_mean[idx]['prev_trial_code']
-	    plt.errorbar([0,1,2], data_mean[idx]['minus_cycles'], color=self.colors[t], yerr=data_sem[idx]['minus_cycles'], label=self.names[t], lw=self.lw)
-	    plt.title('RTs depending on previous trial')
+	    plt.errorbar([0,1,2], data_mean[idx]['minus_cycles']*self.ms, color=self.colors[t], yerr=data_sem[idx]['minus_cycles']*self.ms, label=tag, lw=3)
+	    #plt.title('RTs depending on previous trial')
 	    plt.xticks(np.arange(len(self.pt_code.values())), self.pt_code.values())
-	    plt.ylabel('RTs')
+	    plt.ylabel('RTs (ms)')
 	    plt.xlabel('Previous Trial Type')
 	    plt.legend(loc=0)
-	    plt.xlim((-.5, 3.5))
+	    plt.xlim((-.5, 2.5))
 	    #plt.ylim((60,180))
 
     def plot_GoRespVsInhibResp(self):
@@ -266,47 +268,117 @@ class StopSignalBase(emergent.Base):
 	    plt.legend(loc=2)
 
     def plot_SSDs(self):
+        fig = plt.gcf()
+        fig.subplots_adjust(bottom=0.2)
+
         base = np.array([np.mean(subj) for subj in self.SSD['intact']])
 
         tags = self.tags[1:]
 
         for t,tag in enumerate(tags):
-            plt.bar(t-.5, np.mean([np.mean(subj) for subj in self.SSD[tag]]-base),
-                    yerr=sem([np.mean(subj) for subj in self.SSD[tag]]), color='.3', label=tag, ecolor='k')
+            plt.bar(t-.4, np.mean([np.mean(subj) for subj in self.SSD[tag]]-base)*self.ms,
+                    yerr=sem([np.mean(subj) for subj in self.SSD[tag]])*self.ms, color='.7', label=tag, ecolor='k')
 
         plt.xticks(range(len(self.names)), self.names) #np.linspace(0.5,len(self.tags),len(self.tags)-.5), self.tags)
 
-        plt.ylabel('Mean SSD (relative to intact)')
-        plt.ylim(-20,20)
+        plt.ylabel('SSD relative to intact (ms)')
+        #plt.tick_params(labelsize='medium')
+        plt.ylim(-20*self.ms,20*self.ms)
+
+        ax = plt.gca()
+        fontsize = 13
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+
 
     def plot_SSRTs(self):
+        fig = plt.gcf()
+        fig.subplots_adjust(bottom=0.2)
+
         base = np.array(self.SSRT['intact'])
 
         tags = self.tags[1:]
 
         for t,tag in enumerate(tags):
             diff_scores = self.SSRT[tag]-base
-            plt.bar(t-.5, np.mean(diff_scores), yerr=sem(diff_scores), color='.3', label=tag, ecolor='k')
+            plt.bar(t-.4, np.mean(diff_scores)*self.ms, yerr=sem(diff_scores)*self.ms, color='.7', label=tag, ecolor='k')
 
         plt.xticks(range(len(self.names)), self.names) #np.linspace(0.5,len(self.tags),len(self.tags)-.5), self.tags)
-        plt.ylabel('Mean SSRT (relative to intact)')
-        plt.ylim(-20,20)
+        plt.ylabel('SSRT relative to intact (ms)')
+        plt.ylim(-20*self.ms,20*self.ms)
+        #plt.tick_params(labelsize='medium')
         #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
+        ax = plt.gca()
+        fontsize = 13
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+
+
     def plot_GoRTs(self):
+        fig = plt.gcf()
+        fig.subplots_adjust(bottom=0.2)
+
         base = np.array([np.mean(subj) for subj in self.GoRT['intact']])
 
         tags = self.tags[1:]
         for t,tag in enumerate(tags):
             diff_scores = [np.mean(subj) for subj in self.GoRT[tag]]-base
-            plt.bar(t-.5, np.mean(diff_scores),
-                    yerr=sem(diff_scores), color='.3', label=tag, ecolor='k')
+            plt.bar(t-.4, np.mean(diff_scores)*self.ms,
+                    yerr=sem(diff_scores)*self.ms, color='.7', label=tag, ecolor='k')
 
         plt.xticks(range(len(self.names)), self.names) #np.linspace(0.5,len(self.tags),len(self.tags)-.5), self.tags)
 
-        plt.ylabel('Mean GoRT (relative to intact)')
-        plt.ylim(-20,20)
+        plt.ylabel('GoRT relative to intact (ms)')
+        plt.ylim(-20*self.ms,20*self.ms)
+        #plt.tick_params(labelsize='medium')
         #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+        ax = plt.gca()
+        fontsize = 13
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+
+    def plot_cum_RT_dist(self):
+        for t,tag in enumerate(['intact']):
+            #plt.figure()
+
+            SSD = np.median(self.data_settled[tag]['SSD'])
+
+	    data_settled = self.data_settled[tag][self.data_settled[tag]['inhibited'] == 0]
+	    data_ssd = data_settled # data_settled[data_settled['SSD'] == SSD]
+
+            bins = 140
+            upper = 150
+
+            inhib_prob = np.mean(self.data[tag][self.data[tag]['SS_presented'] == 1]['inhibited'])
+            x = np.linspace(0, upper, bins)
+            cdf_go = np.cumsum(np.histogram(data_settled[data_settled['SS_presented'] == 0]['minus_cycles'], density=True, bins=bins, range=(0, upper))[0])
+
+            cdf_go /= cdf_go[-1]
+
+            cdf_ss = np.cumsum(np.histogram(data_ssd[data_ssd['SS_presented'] == 1]['minus_cycles'], density=True, bins=bins, range=(0, upper))[0])
+
+            cdf_ss /= cdf_ss[-1]
+            cdf_ss *= inhib_prob
+
+
+            plt.plot(x*self.ms, cdf_go, color='k', label='Go trials')
+            plt.plot(x*self.ms, cdf_ss, color='g', label='Stop trials')
+            plt.legend(loc=0)
+            plt.axhline(inhib_prob, color='b', linestyle='--')
+            plt.axvline(np.mean(self.SSD[tag])*self.ms, color='r', linestyle='-')
+            plt.axvline((np.mean(self.SSD[tag])+np.mean(self.SSRT[tag]))*self.ms, color='r', linestyle='--')
+	    plt.xlabel('RT (ms)')
+            plt.ylabel('Cumulative probability')
+            plt.title('Model %s' % tag)
+
 
     def plot_RT_dist(self):
 	i=1
@@ -351,7 +423,7 @@ class StopSignalBase(emergent.Base):
 	    ml.figure(t)
 	    chart = ml.barchart(GoHist)
 
-@pools.register_group(['stopsignal', 'all'])
+@pools.register_group(['stopsignal', 'all','nocycle'])
 class StopSignal(StopSignalBase):
     def __init__(self, **kwargs):
         super(StopSignal, self).__init__(intact=True, NE=True, STN=True, PD=True, motivation=True, IFG=True, SZ=True, **kwargs)
@@ -360,6 +432,10 @@ class StopSignal(StopSignalBase):
         #self.names = self.tags
 
     def analyze(self):
+        self.new_fig()
+        self.plot_cum_RT_dist()
+        self.save_plot('cum_RT')
+
         self.new_fig()
         self.plot_GoRTs()
         self.save_plot('GoRTs')
@@ -372,6 +448,10 @@ class StopSignal(StopSignalBase):
         self.plot_SSDs()
         self.save_plot('SSDs')
 
+        self.new_fig()
+        self.plot_seq_effects()
+        self.save_plot('seq_effects')
+
         #self.new_fig()
         #self.plot_staircase()
         #self.save_plot('staircase')
@@ -381,7 +461,13 @@ class StopSignalStaircase(StopSignalBase):
     def __init__(self, **kwargs):
         super(StopSignalStaircase, self).__init__(intact=True, NE=False, STN=False, PD=False, motivation=False, IFG=True, **kwargs)
 
-        self.names = self.tags
+        for flag in range(len(self.flags)):
+            self.flags[flag]['max_epoch'] = 600
+            self.flags[flag]['SS_prob'] = 0.1
+            self.flags[flag]['SSD_start'] = 80
+
+        self.names = ['intact', 'Reduced IFG-STN\nconnect.']
+
 
     def analyze(self):
         self.new_fig()
@@ -392,6 +478,8 @@ class StopSignalStaircase(StopSignalBase):
 class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
     def __init__(self, **kwargs):
 	super(StopSignal_cycle, self).__init__(**kwargs)
+
+        self.ms = 4
 
 	self.SSRT = {}
 	self.GoRT = {}
@@ -429,12 +517,21 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 
     def analyze(self):
         self.new_fig()
-        self.analyze_STN_act(tag='intact')
+        self.analyze_act_SS_onset(name='STN')
         self.save_plot("STN_act")
 
         self.new_fig()
-        self.analyze_SC_act_avg(tag='intact')
-        self.save_plot("SC_act_intact")
+        self.analyze_act_SS_onset(name='ACC', field='ACC_act', wind=(20, 100))
+        self.save_plot("ACC_act_SS_onset")
+
+        self.new_fig()
+        self.analyze_act_stim_onset(tag='intact')
+        self.save_plot("SC_act_stim_onset")
+
+        self.new_fig()
+        self.analyze_act_stim_onset(tag='intact', name='ACC', field='ACC_act')
+        self.save_plot("ACC_act_stim_onset")
+
 
         self.new_fig()
         self.analyze_act_post(nucleus='STN')
@@ -447,83 +544,78 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
         #self.analyze_SC_act_ind(tag='fixed_SSD', SSDs=(self.SSD_set,))
         #self.save_plot("SC_act_ind_fixed")
 
-    def analyze_STN_act(self, tag=None):
-        if tag is None:
-            tag = 'intact'
-	wind=(50,50)
-	STN_ss_resp = self.extract_cycles(
+    def analyze_act_SS_onset(self, name='STN', field='STN_acts_avg', tag='intact', wind=(50, 50)):
+	ss_resp = self.extract_cycles(
 	    tag,
 	    ((self.data['trl'][tag]['SS_presented'] == 1) &
 	     (self.data['trl'][tag]['inhibited'] == 0)),
-	    'STN_acts_avg',
+            field,
 	    center='SSD',
 	    wind=wind)
 
-	STN_ss_inhib = self.extract_cycles(
-	    tag,
+	ss_inhib = self.extract_cycles(
+            tag,
 	    ((self.data['trl'][tag]['SS_presented'] == 1) &
 	     (self.data['trl'][tag]['inhibited'] == 1)),
-	    'STN_acts_avg',
+            field,
 	    center='SSD',
 	    wind=wind)
 
 	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        self.plot_filled(x, STN_ss_inhib, label='SS_inhib', color='g')
-        self.plot_filled(x, STN_ss_resp, label='SS_resp', color='r')
-#	plt.plot(x, np.mean(STN_ss_Go, axis=0))
+        plt.plot(x, np.mean(ss_inhib, axis=0), label='SS_inhib', color='g', lw=3)
+        plt.plot(x, np.mean(ss_resp, axis=0), label='SS_resp', color='r', lw=3.)
 	plt.xlabel('Cycles around Stop-Signal')
-	plt.ylabel('Average STN activity')
-	plt.title('STN activity in SS_inhib and SS_resp trials: %s'%tag)
+	plt.ylabel('Average %s activity' % name)
 	plt.legend(loc=0, fancybox=True)
 
-    def analyze_SC_act_avg(self, tag=None):
-        if tag is None:
-            tag = 'intact'
+    def analyze_act_stim_onset(self, name='SC', field='Thalam_unit_corr', tag='intact'):
         start_cycle = 0
-	wind = (0,100)
+	wind = (0,125)
         #wind = (100,100)
         # From emergent, SC threshold:
         data_grp_mean, data_grp_sem = emergent.group_batch(self.data['trl'][tag], ['SS_presented'])
 
+
         idx = data_grp_mean['SS_presented'] == 1
         SSD = np.median(self.data_settled[tag]['SSD'])
 
-        thalam_ss_resp = self.extract_cycles(
+        ss_resp = self.extract_cycles(
             tag,
             ((self.data['trl'][tag]['SS_presented'] == 1) &
              (self.data['trl'][tag]['inhibited'] == 0) &
              (self.data['trl'][tag]['epoch'] > 30) &
              (self.data['trl'][tag]['SSD'] == SSD)),
-            'Thalam_unit_corr', cycle=start_cycle,
+            field, cycle=start_cycle,
             #center='SSD',
             wind=wind)
 
-        thalam_ss_inhib = self.extract_cycles(
+        ss_inhib = self.extract_cycles(
             tag,
             ((self.data['trl'][tag]['SS_presented'] == 1) &
              (self.data['trl'][tag]['inhibited'] == 1) &
              (self.data['trl'][tag]['epoch'] > 30) &
              (self.data['trl'][tag]['SSD'] == SSD)),
-            'Thalam_unit_corr', cycle=start_cycle,
+            field, cycle=start_cycle,
             #center='SSD',
             wind=wind)
 
-        x=np.linspace(wind[0]+start_cycle,wind[1]+start_cycle,np.sum(wind)+1)
+        x=np.linspace(wind[0]+start_cycle,wind[1]+start_cycle,np.sum(wind)+1)*self.ms
 
         #thr_cross = np.where(np.mean(thalam_ss_resp, axis=0) > thr)[0][0]
-        self.plot_filled(x, thalam_ss_inhib, label='SS_inhib', color='g')
-        self.plot_filled(x, thalam_ss_resp, label='SS_resp', color='r')
+        plt.plot(x, np.mean(ss_inhib, axis=0), label='canceled stop trials', color='.7', lw=3.)
+        plt.plot(x, np.mean(ss_resp, axis=0), label='non-canceled stop trials', color='k', lw=3.)
 
-        plt.axhline(y=self.SC_thr, color='k')
+        plt.axhline(y=self.SC_thr, color='k', lw=3., linestyle='-.')
         #plt.axvline(x=thr_cross, color='k')
         #plt.axvline(x=np.mean(self.SSD['intact'])+np.mean(self.SSRT['intact']), color='k')
         #plt.axvline(x=np.mean(self.SSD['intact']), color='k')
-        plt.axvline(x=SSD, color='k')
-        plt.axvline(x=SSD + np.mean(self.SSRT[tag]), color='k')
+        plt.axvline(x=SSD*self.ms, color='k', lw=3.)
+        plt.axvline(x=(SSD + np.mean(self.SSRT[tag]))*self.ms, color='k', linestyle='--', lw=2.)
 
-        plt.xlabel('Cycles')
-        plt.ylabel('Average SC activity')
-        plt.title('SC activity during inhibited and not-inhibited stop trials: %s'%tag)
+        plt.ylim(0,1)
+        plt.xlabel('Time from Target Onset (ms)')
+        plt.ylabel('%s activity' % name)
+        #plt.title('SC activity during inhibited and not-inhibited stop trials: %s'%tag)
         plt.legend(loc=0)
 
     def analyze_SC_act_ind(self, SSDs=None, tag=None, plot_ind=False):
@@ -597,6 +689,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
                 plt.title('SC activity during inhibited and not-inhibited stop trials\n: %s, SSD: %i, mean response rate: %f'%(tag, SSD, mean_ss_resp))
 
     def analyze_act_post(self, tag=None, nucleus=None):
+        cycle = 0
         if nucleus is None:
             nucleus = 'STN'
 
@@ -604,14 +697,14 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
             nuc_tag = 'STN_acts_avg'
         elif nucleus == 'SC':
             nuc_tag = 'Thalam_unit_corr'
+            cycle = 20
         elif nucleus == 'IFG':
             nuc_tag = 'IFG_acts_avg'
 
         if tag is None:
             tag = 'intact'
 	wind = (0, 150)
-        cycle = 20
-	STN_ss_pre_none = self.extract_cycles(
+	ss_pre_none = self.extract_cycles(
 	    tag,
 	    ((self.data['trl'][tag]['SS_presented'] == 0) &
              (self.data['trl'][tag]['prev_trial_code'] <= 1) &
@@ -621,7 +714,7 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
             cycle=cycle,
 	    wind=wind)
 
-	STN_ss_pre_ss = self.extract_cycles(
+	ss_pre_ss = self.extract_cycles(
 	    tag,
 	    ((self.data['trl'][tag]['SS_presented'] == 0) &
              (self.data['trl'][tag]['prev_trial_code'] > 1) &
@@ -631,14 +724,14 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
             cycle=cycle,
 	    wind=wind)
 
-	x=np.linspace(-wind[0]+cycle,wind[1]+cycle,np.sum(wind)+1)
-        self.plot_filled(x, STN_ss_pre_none, label='previous Go trial', color='g')
-        self.plot_filled(x, STN_ss_pre_ss, label='previous Stop trial', color='r')
-#	plt.plot(x, np.mean(STN_ss_Go, axis=0))
-	plt.xlabel('time (cycles)')
-	plt.ylabel('Average %s activity'%nucleus)
-	plt.title('%s activity following Go and Stop trials: %s'%(nucleus, tag))
-	plt.legend(loc=0, fancybox=True)
+	x = np.linspace(-wind[0]+cycle,wind[1]+cycle,np.sum(wind)+1) * self.ms
+        plt.plot(x, np.mean(ss_pre_none, axis=0), label='previous Go trial', color='k', lw=3)
+        plt.plot(x, np.mean(ss_pre_ss, axis=0), label='previous Stop trial', color='.7', lw=3)
+#	plt.plot(x, np.mean(ss_Go, axis=0))
+	plt.xlabel('Time from stimulus onset (ms)')
+	plt.ylabel('%s activity'%nucleus)
+	#plt.title('%s activity following Go and Stop trials: %s'%(nucleus, tag))
+	plt.legend(loc='best', frameon=False)
 
 #@pools.register_group(['stopsignal', 'DDM'])
 class StopSignalDDM(StopSignalBase):
@@ -719,17 +812,25 @@ class StopSignal_cycle_SC(StopSignal_cycle):
 
         a_thr = 0.588
         b_inc_dt = 0.033
-        self.flags.append(copy(self.flag))
-        self.tags.append('%.3f:%.3f'%(a_thr, b_inc_dt))
-        self.flags[-1]['tag'] = '_' + self.tags[-1]
-        self.flags[-1]['a_thr'] = a_thr
-        self.flags[-1]['b_inc_dt'] = b_inc_dt
+        # self.flags.append(copy(self.flag))
+        # self.tags.append('%.3f:%.3f'%(a_thr, b_inc_dt))
+        # self.flags[-1]['tag'] = '_' + self.tags[-1]
+        # self.flags[-1]['a_thr'] = a_thr
+        # self.flags[-1]['b_inc_dt'] = b_inc_dt
+
+        for g_bar_a in np.linspace(3,8,10):
+            self.flags.append(copy(self.flag))
+            self.tags.append('%.3f'%(g_bar_a))
+            self.flags[-1]['tag'] = '_' + self.tags[-1]
+            self.flags[-1]['a_thr'] = a_thr
+            self.flags[-1]['b_inc_dt'] = b_inc_dt
+            self.flags[-1]['g_bar_a'] = g_bar_a
 
     def analyze(self):
         for tag in self.tags:
             self.new_fig()
             try:
-                self.analyze_SC_act_avg(tag=tag)
+                self.analyze_act_stim_onset(tag=tag)
             except ValueError:
                 continue
             self.save_plot('sc_%s'%tag)

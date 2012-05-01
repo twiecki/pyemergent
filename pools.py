@@ -102,6 +102,11 @@ class Pool(object):
         if queue:
             self.queue_jobs()
 
+    def run(self):
+        for model in self.queue:
+            print model
+            call_emergent(dict_to_list(model), silent=not(self.debug), emergent_exe=self.emergent_exe, prefix=self.prefix)
+
     def analyze(self):
         for model in self.instantiated_models:
             model.load_logs()
@@ -195,7 +200,7 @@ class PoolMPI(Pool):
                     # Task queue is empty
                     if self.debug:
                         print "Controller: Task queue is empty"
-
+                        MPI.COMM_WORLD.send([], dest=status.source, tag=2)
                         workers_done.append(status.source)
                         if self.debug:
                             print workers_done
