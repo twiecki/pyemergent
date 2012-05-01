@@ -66,7 +66,8 @@ class Base(object):
 		     'batches': 1,
                      'SZ_mode': 'false',
                      #'rnd_init': 'OLD_SEED',
-                     'LC_mode': 'phasic',
+                     'LC_mode': 'tonic',
+                     'tonic_NE': 0.8,
                      'motivational_bias': 'NO_BIAS'}
 
         if debug is not None:
@@ -147,7 +148,7 @@ class Base(object):
 
     def new_fig(self, **kwargs):
         from pylab import figure, subplot
-	figure(**kwargs)
+	fig = figure(**kwargs)
 	ax = subplot(111)
 	#ax.spines['left'].set_position('center')
 	ax.spines['right'].set_color('none')
@@ -156,35 +157,32 @@ class Base(object):
 	ax.xaxis.set_ticks_position('bottom')
 	ax.yaxis.set_ticks_position('left')
 
+        return fig
+
     def save_plot(self, name):
         from pylab import savefig
 	savefig(self.plot_prefix_png + name + ".png")
 	savefig(self.plot_prefix_eps + name + ".eps")
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
-    def fit_hddm(self, depends_on=None, plot=False, mcmc=False, **kwargs):
-        import hddm
-        import hddm.sandbox
-        #from hddm.sandbox.model import HDDMSwitch
-        # Remove outliers
-        # [self.hddm_data['instruct']==1]
-        # Add depends_on for threshold in prosaccade trials
-        if depends_on.has_key('a'):
-            depends_on['a'].append('trial_type')
-        else:
-            depends_on['a'] = 'trial_type'
+def fit_hddm((data, depends_on)):
+    import hddm
+    import hddm.sandbox
 
-        model = hddm.sandbox.HDDMSwitch(self.hddm_data, depends_on=depends_on, is_group_model=False, init=False, **kwargs)
-        if mcmc:
-            model.sample(10000, burn=5000)
-            model.print_stats()
-            hddm.utils.plot_posteriors(model)
-            return model.mc
-        else:
-            map = model.map(runs=14)
-            for node in map.stochastics:
-                print "%s: %f" % (node.__name__, node.value)
-            return map
+    # Select only antisaccade trials
+    data = data[data['instruct']==1]
+
+    model = hddm.sandbox.HDDMSwitch(data, depends_on=depends_on, is_group_model=False, init=True)
+
+    model.create_nodes()
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
+    print "Logp: %f" % model.mc.logp
+    #hddm.utils.plot_posteriors(model)
+    stats = model.stats()
+    stats['logp'] = model.mc.logp
+    return stats
 
 class BaseCycle(Base):
     def __init__(self, **kwargs):
@@ -428,13 +426,16 @@ def group_rec(data, group_names, data_mean, data_sem, row_idx):
         row_idx.add()
         return
 
-def group_batch(data, group_names):
+def group_batch(data, group_names, individual_batches=False):
     """Convience function for group which groups over batches first and
     then over group_names so that SEM values are group wise"""
     data_mean, data_sem = group(data, ['batch'] + group_names)
     data_mean_gp, data_sem_gp = group(data_mean, group_names)
 
-    return data_mean_gp, data_sem_gp
+    if individual_batches:
+        return data_mean, data_sem
+    else:
+        return data_mean_gp, data_sem_gp
 
 def gen_testdata():
     new_cols = np.array([0,0,0,0])
@@ -529,7 +530,7 @@ def main():
         pool.select(groups, exclude=exclude)
         pool.prepare(batches=batches, debug=verbose)
         if run:
-            raise NotImplementedError, "Running locally not implemented."
+            pool.run() #raise NotImplementedError, "Running locally not implemented."
         else:
             pool.analyze()
 
