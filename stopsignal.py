@@ -1,5 +1,6 @@
 from __future__ import division
 import numpy as np
+import pandas as pd
 
 from copy import copy
 
@@ -36,7 +37,7 @@ def calc_cond_mean_std(data, cond, col):
 
 
 class StopSignalBase(emergent.Base):
-    def __init__(self, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, IFG=False, salience=False, **kwargs):
+    def __init__(self, intact=True, pretrial=False, SZ=False, PD=False, NE=False, STN=False, motivation=False, IFG=False, salience=False, decay_ifg=0, num_trials=200, SS_prob=.25, test_ssd_mode=False, **kwargs):
 	super(StopSignalBase, self).__init__(**kwargs)
 	self.SSRT = {}
 	self.GoRT = {}
@@ -62,9 +63,10 @@ class StopSignalBase(emergent.Base):
 
         self.flag['task'] = 'STOP_SIGNAL'
 
-        self.flag['test_SSD_mode'] = 'false'
-        self.flag['max_epoch'] = 200
-	self.flag['SS_prob'] = .25
+        self.flag['test_SSD_mode'] = test_ssd_mode
+        self.flag['max_epoch'] = num_trials
+	self.flag['SS_prob'] = SS_prob
+	self.flag['decay_ifg'] = decay_ifg
 
         self.tags = []
         self.names = []
@@ -206,20 +208,24 @@ class StopSignalBase(emergent.Base):
 	for t,tag in enumerate(self.tags):
 	    self._preprocess_data(self.data[tag], tag)
 
-    def go_ddm(self, plot=True):
-	"""Fit and plot DDM to data of Go-trials"""
-        return
-	for t,tag in enumerate(self.tags):
-	    # Select Go trials
-	    data = self.data[tag]
-	    idx = data['SS_presented'] == False
-	    self.fit_ddm_data(data[idx][''],
-			      data[idx][''],
-			      data[idx]['minus_cycles'],
-			      plot=plot,
-			      tag=tag,
-			      color=t)
+    def plot_RT_dist_SSD(self):
+        for tag in self.tags:
+            data = self.data[tag]
+            ssds = np.unique(data['SSD'][data['SSD'] != -1])
+            fig = plt.figure()
+            ax = fig.add_subplot(len(ssds) + 1, 1, 1)
+            max_rt = data[data['inhibited'] == False]['minus_cycles'].max() * self.ms*3
+            go_rts = data[(data['SS_presented'] == False) & (data['inhibited'] == False)]['minus_cycles'] * self.ms*3
+            ax.hist(go_rts, range=(0, max_rt), bins=100)
+            for i, ssd in enumerate(ssds):
+                go_rts = data[(data['SSD'] == ssd) & (data['inhibited'] == False)]['minus_cycles'] * self.ms*3
+                if len(go_rts) == 0:
+                    continue
 
+                ax = fig.add_subplot(len(ssds) + 1, 1, i+2)
+                ax.hist(go_rts, range=(0, max_rt), bins=100)
+                ax.axvline(ssd * self.ms * 3)
+            self.save_plot('RT_dist_SSD_%s' % tag)
 
     def plot_staircase(self):
 	for t,(tag, color) in enumerate(zip(self.tags, ['k', '.7'])):
@@ -414,19 +420,10 @@ class StopSignalBase(emergent.Base):
 	plt.ylabel('P(inhib|signal)')
 	plt.legend(loc=0, fancybox=True)
 
-    def plot_3dhisto(self):
-	for t,tag in enumerate(self.tags):
-	    # Plot GoRT histogram
-	    GoHist = []
-	    for GoDist in self.GoRT[tag]:
-		GoHist.append(np.histogram(GoDist, bins=75, range=(0,200))[0])
-	    ml.figure(t)
-	    chart = ml.barchart(GoHist)
-
 @pools.register_group(['stopsignal', 'all','nocycle'])
 class StopSignal(StopSignalBase):
     def __init__(self, **kwargs):
-        super(StopSignal, self).__init__(intact=True, NE=True, STN=True, PD=True, motivation=True, IFG=True, SZ=True, **kwargs)
+        super(StopSignal, self).__init__(NE=True, STN=True, PD=True, motivation=True, IFG=True, SZ=True, **kwargs)
         #super(StopSignal, self).__init__(intact=True, NE=False, STN=False, PD=False, motivation=True, IFG=False, SZ=False, **kwargs)
 
         #self.names = self.tags
@@ -733,39 +730,6 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 	#plt.title('%s activity following Go and Stop trials: %s'%(nucleus, tag))
 	plt.legend(loc='best', frameon=False)
 
-#@pools.register_group(['stopsignal', 'DDM'])
-class StopSignalDDM(StopSignalBase):
-    def __init__(self, **kwargs):
-	super(StopSignalDDM, self).__init__(**kwargs)
-	self.tags = ['intact']
-	self.flag['tag'] = '_' + self.tags[0]
-	self.flag['staircase_mode'] = True
-	self.flags.append(copy(self.flag))
-
-    def preprocess_data(self):
-	# Construct data structure for ddm fits.
-
-	self.stimulus = {}
-	self.response = {}
-	self.rt = {}
-
-	for tag in self.tags:
-            data = self.data[tag]
-            # Go trials following go trials
-	    idx_post_go = ((data['SS_presented'] == 0) & (data['inhibited'] == 0) & (data['prev_trial_code'] <= 1))
-            data_post_go = data[idx_post_go]
-            # Go trials following stop-signal trials
-	    idx_post_stop = ((data['SS_presented'] == 0) & (data['inhibited'] == 0) & (data['prev_trial_code'] > 1))
-            data_post_stop = data[idx_post_stop]
-
-	    self.stimulus[tag] = np.copy(data['trial_name'])
-	    self.response[tag] = np.copy(data['error'])
-	    self.rt[tag] = np.copy(data['minus_cycles'])/150.
-	    idx = self.stimulus[tag] == '"Antisaccade"'
-	    # Invert errors of antisaccade trials, that way,
-	    # successful antisaccades are 1, while errors
-	    # (i.e. prosaccades) are 0
-	    self.response[tag][idx] = 1 - self.response[tag][idx]
 
 @pools.register_group(['stopsignal', 'cycle', 'post'])
 class StopSignal_cycle_post(StopSignal_cycle):
@@ -834,3 +798,229 @@ class StopSignal_cycle_SC(StopSignal_cycle):
             except ValueError:
                 continue
             self.save_plot('sc_%s'%tag)
+
+class StopSignalDDMBase(StopSignalBase):
+    def __init__(self, **kwargs):
+        if not kwargs.has_key('fit_ddm'):
+            self.fit_ddm = True
+        else:
+            self.fit_ddm = kwargs['fit_ddm']
+            del kwargs['fit_ddm']
+
+        if not kwargs.has_key('mcmc'):
+            self.mcmc = True
+        else:
+            self.mcmc = kwargs['mcmc']
+            del kwargs['mcmc']
+
+        intact = kwargs.pop('intact', False)
+
+        super(StopSignalDDMBase, self).__init__(intact=intact, decay_ifg=1, num_trials=2000, **kwargs)
+        if not kwargs.has_key('depends'):
+            self.depends = ['a', 't', 'v', 'ssrt']
+        else:
+            self.depends = kwargs['depends']
+
+        self.condition = 'none'
+
+    def set_flags_condition(self, condition, start, stop, samples, tag=None):
+        self.x = np.linspace(start, stop, samples)
+        self.condition = condition
+        for i in self.x:
+            if type(condition) is list:
+                for c in condition:
+                    self.flag[c] = i
+            else:
+                self.flag[condition] = i
+            if tag is None:
+                tag_name = '%s_%.4f' % (condition, i)
+            else:
+                tag_name = '%s_%.4f' % (tag, i)
+            self.tags.append(tag_name)
+            self.flag['tag'] = '_' + tag_name
+            self.flags.append(copy(self.flag))
+
+    def preprocess_data(self, cutoff=0):
+	# Construct data structure for ddm fits.
+	# Response 0 -> prosaccade
+	# Response 1 -> antisaccade
+
+	self.stimulus = {}
+	self.response = {}
+	self.rt = {}
+        self.subj_idx = {}
+        self.tags_array = {}
+
+        dfs = []
+        for tag in self.tags:
+            df = pd.DataFrame(self.data[tag])
+            df['dependent'] = tag
+            dfs.append(df)
+
+        data = pd.concat(dfs, ignore_index=True)
+        data = data.rename(columns={'SS_presented' : 'ss_presented',
+                                    'minus_cycles' : 'rt',
+                                    'error'        : 'response',
+                                    'batch'        : 'subj_idx',
+                                    'SSD'          : 'ssd'
+        })
+
+
+        data['rt'] *= self.ms/1000.
+        data['ssd'] *= self.ms/1000.
+
+        self.hddm_data = data
+
+    def analyze(self):
+        #self.plot_RT_histo()#(cutoff=50)
+        #self.save_plot('RT_histo')
+
+        self.plot_RT_dist_SSD()
+
+        if self.fit_ddm:
+            # Fitting DDM
+            print "Fitting DDM."
+            self.new_fig()
+            self.fit_and_analyze_ddm()
+
+            self.new_fig()
+            self.plot_param_influences()
+
+            self.new_fig()
+            self.plot_hddm_fit()
+        else:
+            self.new_fig()
+            self.plot_hddm_fit(plot_fit=False)
+
+
+    def fit_and_analyze_ddm(self, retry=False):
+        #from multiprocessing import Pool
+
+        self.hddm_models = {}
+
+        experiments = [(self.hddm_data, {param: 'dependent'}) for param in self.depends]
+
+        stats = map(emergent.fit_hddm_stop, experiments)
+
+        self.stats_dict = {}
+
+        for param, stat in zip(self.depends, stats):
+            self.stats_dict[param] = stat
+
+        self.new_fig()
+
+        #plt.subplot(211)
+        logps = [self.stats_dict[param]['logp'] for param in self.depends]
+        print "Logps:"
+        for param, logp in zip(self.depends, logps):
+            print "& %s &  %d\\" %(param, round(logp))
+        print "End"
+
+        plt.plot(logps, lw=self.lw)
+        plt.ylabel('logp')
+        plt.xticks(np.arange(5), ['drift', 'thresh', 'ter', 'SSRT'])
+        #if self.hddm_models.has_key('none'):
+        #    plt.axhline(self.hddm_models['none'].logp)
+        plt.title('HDDM model fits for different varying parameters')
+
+        self.save_plot('model_probs')
+
+
+    def plot_hddm_fit(self, range_=(-1., 1.), bins=150., plot_fit=True):
+        import hddm
+        import copy
+        x = np.linspace(range_[0], range_[1], 200)
+
+        # Plot parameters
+        for i,test_param in enumerate(self.depends):
+            #print test_param
+            plt.figure()
+            for j, dep_val in enumerate(self.x):
+                param_vals = {}
+
+                tag = "%s('%s_%.4f',)" %(test_param, self.condition, dep_val)
+                dep_tag = '%s_%.4f'%(self.condition, dep_val)
+
+                plt.subplot(3,3,j+1)
+
+                data = self.hddm_data[(self.hddm_data['dependent']==dep_tag) & (self.hddm_data.inhibited == False) & (self.hddm_data.ss_presented == False)]
+                data = hddm.utils.flip_errors(data)
+
+                data_ss = self.hddm_data[(self.hddm_data['dependent']==dep_tag) & (self.hddm_data.inhibited == False) & (self.hddm_data.ss_presented == True)]
+                data_ss = hddm.utils.flip_errors(data_ss)
+
+                # Plot histogram
+                hist = hddm.utils.histogram(data['rt'], bins=bins, range=range_,
+                                            density=True)[0]
+                plt.plot(np.linspace(range_[0], range_[1], bins), hist)
+
+                # Plot histogram of stop-errors
+                hist_ss = hddm.utils.histogram(data_ss['rt'], bins=bins, range=range_,
+                                               density=True)[0]
+                plt.plot(np.linspace(range_[0], range_[1], bins), hist_ss)
+
+                # Plot fit
+                if plot_fit:
+                    fitted_params = copy.deepcopy(self.stats_dict[test_param])
+                    for param in self.depends:
+                        if param == test_param:
+                            param_vals[param] = fitted_params[tag]['mean']
+                        else:
+                            param_name = param# +'_group'
+                            param_vals[param] = fitted_params[param_name]['mean']
+
+                    #fit = hddm.likelihoods.wfpt_switch.pdf(x, param_vals['vpp'], param_vals['vcc'], param_vals['Vcc'], param_vals['a'], .5, param_vals['t'], param_vals['tcc'], param_vals['T'])
+                    #plt.plot(x, fit)
+
+                plt.title(tag)
+
+            if not plot_fit:
+                # Bail, no need to replot the same thing
+                self.save_plot('hddm_fit')
+                return
+
+            self.save_plot('hddm_fit_%s'%test_param)
+
+    def plot_param_influences(self):
+        # Plot parameters
+        for i,test_param in enumerate(self.depends):
+            y = []
+            yerr = []
+            for x in self.x:
+                tag = "%s('%s_%.4f',)" %(test_param, self.condition, x)
+                y.append(self.stats_dict[test_param][tag]['mean'])
+                yerr.append(self.stats_dict[test_param][tag]['standard deviation'])
+                #yerr.append(self.hddm_models[test_param].params_est_std[tag])
+            plt.subplot(2,2,i+1)
+            plt.errorbar(self.x, y=y, yerr=yerr, label=test_param, lw=self.lw, color='.8')
+            plt.plot(self.x, y, 'o', color='.8')
+            plt.ylabel(test_param)
+        self.save_plot('param_influences')
+
+@pools.register_group(['stopsignal', 'DDM', 'STN'])
+class StopSignalDDMSTN(StopSignalDDMBase):
+    def __init__(self, start=0.0, stop=.75, samples=5, **kwargs):
+        super(self.__class__, self).__init__(SS_prob=.85, test_ssd_mode=True, **kwargs)
+        self.set_flags_condition('STN_lesion', start, stop, samples)
+
+@pools.register_group(['stopsignal', 'long'])
+class StopSignalLong(StopSignalDDMBase):
+    def __init__(self, **kwargs):
+        super(StopSignalLong, self).__init__(intact=True, SS_prob=.85, **kwargs)
+        self.flags[-1]['test_SSD_mode'] = True
+
+    def analyze(self):
+        self.plot_RT_dist_SSD()
+        self.hddm_data['rt'] *= 3
+        self.fit_and_analyze_ddm()
+
+    def fit_and_analyze_ddm(self):
+        #from multiprocessing import Pool
+        from hddm.sandbox.model_stopddm import StopDDM
+
+        model = StopDDM(self.hddm_data.to_records(), is_group_model=False)
+
+        model.map(runs=2)
+        model.sample(25000, burn=20000)
+        model.print_stats()
+        model.plot_posteriors()

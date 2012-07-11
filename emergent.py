@@ -184,6 +184,23 @@ def fit_hddm((data, depends_on)):
     stats['logp'] = model.mc.logp
     return stats
 
+def fit_hddm_stop((data, depends_on)):
+    import hddm
+    from hddm.sandbox.model_stopddm import StopDDM
+
+    model = StopDDM(data.to_records(), depends_on=depends_on, is_group_model=False)
+
+    model.create_nodes()
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
+    print "Logp: %f" % model.mc.logp
+    #hddm.utils.plot_posteriors(model)
+    stats = model.stats()
+    stats['logp'] = model.mc.logp
+    return stats
+
+
 class BaseCycle(Base):
     def __init__(self, **kwargs):
 	super(BaseCycle, self).__init__(**kwargs)

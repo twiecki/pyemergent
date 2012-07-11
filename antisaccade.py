@@ -891,6 +891,10 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         self.analyse_SC_act()
         self.save_plot('SC_act')
 
+        self.new_fig()
+        self.analyse_preSMA_correct_error()
+        self.save_plot('preSMA_act_correct_error')
+
 	#self.new_fig()
 	#self.analyse_preSMA_act_anti_pro()
 	#self.save_plot("preSMA_act_pro_anti")
@@ -1087,6 +1091,29 @@ class SaccadeBaseCycle(emergent.BaseCycle):
 	#plt.title('pre-SMA activity during pro- and anti-saccades')
         plt.axvline(x=0, color='k')
 	plt.legend(loc=0, fancybox=True)
+
+
+    def analyse_preSMA_correct_error(self):
+	wind = (0,200)
+
+        preSMA_AS_corr_corr, preSMA_AS_err_corr = self.analyse_AS_correct_error('correct_preSMA', wind=wind, cycle=0)
+        preSMA_AS_corr_err, preSMA_AS_err_err = self.analyse_AS_correct_error('error_preSMA', wind=wind, cycle=0)
+
+	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
+        # self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='r')
+        # self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='b')
+        # self.plot_filled(x, preSMA_PS, label="Prosaccade", color='k')
+        plt.plot(x, np.mean(preSMA_AS_corr_corr, axis=0), label="Correct response unit, correct trial", color='r', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_err_corr, axis=0), label="Error response unit, correct trial", color='b', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_corr_err, axis=0), label="Correct response unit, error trial", color='c', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_err_err, axis=0), label="Error response unit, error trial", color='k', lw=3.)
+
+	#plt.xlabel('Cycles around response')
+	plt.ylabel('FEF activity')
+	#plt.title('pre-SMA activity during pro- and anti-saccades')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+
 
     def analyse_ACC_act(self, tag=None):
 	wind = (100,150)
@@ -1312,7 +1339,7 @@ class FlankerCycle(SaccadeBaseCycle):
         plt.axvline(x=0, color='k')
 	plt.legend(loc=0, fancybox=True)
 
-@pools.register_group(['saccade', 'cycle', 'pretrial'])
+@pools.register_group(['saccade', 'cycle', 'intact'])
 class SaccadeCyclePreTrial(SaccadeBaseCycle):
     def __init__(self, **kwargs):
         super(SaccadeCyclePreTrial, self).__init__(pre_trial_cue=True, **kwargs)
