@@ -276,21 +276,21 @@ class Saccade(emergent.Base):
                          label='Antisaccade',
                          width=self.width, color='k', ecolor='k')
 
-        #plt.title('Pro/Antisaccade: RTs')
-        plt.ylabel('RTs (ms) relative to intact')
-        #plt.xlabel('Task Condition')
-        #plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
-        plt.xticks(np.arange(len(self.names))+.5, self.names)
-        plt.xlim((-0.05,1.+i))
-	    #plt.ylim((0, 200))
-        ax = plt.gca()
-        fontsize = 16
-        for tick in ax.xaxis.get_major_ticks():
-            tick.label1.set_fontsize(fontsize)
-        for tick in ax.yaxis.get_major_ticks():
-            tick.label1.set_fontsize(fontsize)
+            #plt.title('Pro/Antisaccade: RTs')
+            plt.ylabel('RTs (ms) relative to intact')
+            #plt.xlabel('Task Condition')
+            #plt.xticks((0.1, 0.35, 1.1, 1.35, 2.1, 2.35), ("Pro", "Anti", "Pro", "Anti", "Pro", "Anti"))
+            plt.xticks(np.arange(len(self.names))+.5, self.names)
+            plt.xlim((-0.05,1.+i))
+                #plt.ylim((0, 200))
+            ax = plt.gca()
+            fontsize = 16
+            for tick in ax.xaxis.get_major_ticks():
+                tick.label1.set_fontsize(fontsize)
+            for tick in ax.yaxis.get_major_ticks():
+                tick.label1.set_fontsize(fontsize)
 
-	plt.legend((l1, l2), ('Prosaccade', 'Antisaccade'), loc='best', frameon=False)
+            plt.legend((l1, l2), ('Prosaccade', 'Antisaccade'), loc='best', frameon=False)
 
     def plot_error(self, inhibited_as_error=False):
         fig = plt.gcf()
@@ -385,7 +385,7 @@ class Saccade(emergent.Base):
 	    plt.xlim((-0.05,.5+i))
 
 
-    def plot_RT_histo(self, bins=50, range=(0,200), save=True, grid=False, cutoff=None, pro=False):
+    def plot_RT_histo(self, bins=50, range=(0,200), save=True, grid=False, cutoff=None, pro=False, ylim_max=16):
         if pro:
             saccade = '"Prosaccade"'
         else:
@@ -442,7 +442,7 @@ class Saccade(emergent.Base):
                 #plt.title("%s errors and correct responses %s" %(saccade[2:-2], tag))
                 plt.ylabel("Percentage of trials")
                 plt.xlabel("Response time (ms)")
-                plt.ylim((0, 16))
+                plt.ylim((0, ylim_max))
             else:
                 plt.title(tag)
 
@@ -523,23 +523,6 @@ class SaccadeDDMBase(Saccade):
             self.depends = kwargs['depends']
 
         self.condition = 'none'
-
-    def set_flags_condition(self, condition, start, stop, samples, tag=None):
-        self.x = np.linspace(start, stop, samples)
-        self.condition = condition
-        for i in self.x:
-            if type(condition) is list:
-                for c in condition:
-                    self.flag[c] = i
-            else:
-                self.flag[condition] = i
-            if tag is None:
-                tag_name = '%s_%.4f' % (condition, i)
-            else:
-                tag_name = '%s_%.4f' % (tag, i)
-            self.tags.append(tag_name)
-            self.flag['tag'] = '_' + tag_name
-            self.flags.append(copy(self.flag))
 
     def preprocess_data(self, cutoff=0):
 	# Construct data structure for ddm fits.
@@ -661,11 +644,16 @@ class SaccadeDDMBase(Saccade):
 
             self.save_plot('hddm_fit_%s'%test_param)
 
+    def fit_ddm_comparison(self):
+        results = {}
+        results['switch'] = emergent.fit_hddm_no_deps(self.hddm_data, switch=True)
+        results['nobias'] = emergent.fit_hddm_no_deps(self.hddm_data, switch=False)
+        results['bias'] = emergent.fit_hddm_no_deps(self.hddm_data, switch=False, bias=True)
+
+        print results
 
     def fit_and_analyze_ddm(self, retry=False):
         from multiprocessing import Pool
-
-        import pymc as pm
 
         self.hddm_models = {}
         test_params = ['a', 'vpp', 'vcc', 'tcc']
@@ -680,12 +668,8 @@ class SaccadeDDMBase(Saccade):
         for param, stat in zip(test_params, stats):
             self.stats_dict[param] = stat
 
-        #for test_param in test_params:
-        #    self.hddm_models[test_param] = self.fit_hddm(depends_on={test_param:['dependent']}, mcmc=self.mcmc)
-
         self.new_fig()
 
-        #plt.subplot(211)
         logps = [self.stats_dict[param]['logp'] for param in test_params]
         print "Logps:"
         for param, logp in zip(test_params, logps):
@@ -695,8 +679,6 @@ class SaccadeDDMBase(Saccade):
         plt.plot(logps, lw=self.lw)
         plt.ylabel('logp')
         plt.xticks(np.arange(5), ['threshold', 'prepotent_drift', 'pfc_drift', 'tcc'])
-        #if self.hddm_models.has_key('none'):
-        #    plt.axhline(self.hddm_models['none'].logp)
         plt.title('HDDM model fits for different varying parameters')
 
         #plt.subplot(212)
@@ -839,6 +821,17 @@ class SaccadeDDMpreSMA(SaccadeDDMBase):
         self.set_flags_condition('preSMA_striatum_bias', start, stop, samples)
 
 
+@pools.register_group(['DDM', 'compare'])
+class SaccadeDDMCompare(SaccadeDDMBase):
+    def __init__(self, **kwargs):
+        super(SaccadeDDMCompare, self).__init__(**kwargs)
+        self.tags.append('intact')
+        self.flag['tag'] = '_' + self.tags[-1]
+        self.flags.append(copy(self.flag))
+
+    def analyze(self):
+        self.fit_ddm_comparison()
+
 ############################################
 # Cycle
 ###########################################
@@ -854,7 +847,7 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             task = 'SACCADE'
 
 	self.tags = ['intact']
-        self.flag['max_epoch'] = 50
+        self.flag['max_epoch'] = 300
         self.flag['task'] = task
         if pre_trial_cue:
             self.flag['antisaccade_block_mode'] = True
@@ -890,6 +883,18 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         self.new_fig()
         self.analyse_SC_act()
         self.save_plot('SC_act')
+
+        self.new_fig()
+        self.analyse_PFC_act()
+        self.save_plot('PFC_act')
+
+        self.new_fig()
+        self.analyse_act_diff('PFC_acts_avg')
+        self.save_plot('PFC_diff')
+
+        self.new_fig()
+        self.analyse_act_diff('ACC_act')
+        self.save_plot('ACC_diff')
 
         self.new_fig()
         self.analyse_preSMA_correct_error()
@@ -1092,27 +1097,75 @@ class SaccadeBaseCycle(emergent.BaseCycle):
         plt.axvline(x=0, color='k')
 	plt.legend(loc=0, fancybox=True)
 
+    def analyse_PFC_act(self):
+	wind = (100,150)
+
+        preSMA_AS_corr, preSMA_AS_err = self.analyse_AS_correct_error('PFC_acts_avg', wind=wind, center='minus_cycles')
+        preSMA_PS, preSMA_AS = self.analyse_PS_AS('PFC_acts_avg', wind=wind, center='minus_cycles')
+
+	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
+        plt.plot(x, np.mean(preSMA_AS_corr, axis=0), label="Antisaccade Correct", color='r', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_err, axis=0), label="Antisaccade Error", color='b', lw=3.)
+        plt.plot(x, np.mean(preSMA_PS, axis=0), label="Prosaccade", color='k', lw=3.)
+
+	#plt.xlabel('Cycles around response')
+	plt.ylabel('Average PFC activity')
+	#plt.title('pre-SMA activity during pro- and anti-saccades')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+
+    def analyse_act_diff(self, layer, name):
+        import scipy as sp
+        import scipy.interpolate
+        import scipy.signal
+	wind = (100,150)
+
+        AS_corr, AS_err = self.analyse_AS_correct_error(layer, wind=wind, center='minus_cycles')
+        PS, AS = self.analyse_PS_AS(layer, wind=wind, center='minus_cycles')
+
+	x = np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
+        y = np.mean(AS_corr, axis=0)
+        deriv = np.diff(y)
+        gauss = sp.signal.gaussian(20, 3)
+        deriv = sp.convolve(deriv, gauss, mode='same')
+        print len(deriv)
+        print len(x)
+        plt.plot(x[1:], deriv, label="Incongruent correct", color='r', lw=3.)
+
+        y = np.mean(AS_err, axis=0)
+        deriv = np.diff(y)
+        deriv = sp.convolve(deriv, gauss, mode='same')
+        plt.plot(x[1:], deriv, label="Incongruent error", color='b', lw=3.)
+
+        y = np.mean(PS, axis=0)
+        deriv = np.diff(y)
+        deriv = sp.convolve(deriv, gauss, mode='same')
+        plt.plot(x[1:], deriv, label="Congruent", color='k', lw=3.)
+
+	plt.xlabel('ms relative to response')
+	plt.ylabel('Average {name} activity'.format(name=name))
+	#plt.title('pre-SMA activity during pro- and anti-saccades')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+
 
     def analyse_preSMA_correct_error(self):
-	wind = (0,200)
+	wind = (0,100)
 
         preSMA_AS_corr_corr, preSMA_AS_err_corr = self.analyse_AS_correct_error('correct_preSMA', wind=wind, cycle=0)
         preSMA_AS_corr_err, preSMA_AS_err_err = self.analyse_AS_correct_error('error_preSMA', wind=wind, cycle=0)
 
 	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
-        # self.plot_filled(x, preSMA_AS_corr, label="Antisaccade Correct", color='r')
-        # self.plot_filled(x, preSMA_AS_err, label="Antisaccade Error", color='b')
-        # self.plot_filled(x, preSMA_PS, label="Prosaccade", color='k')
         plt.plot(x, np.mean(preSMA_AS_corr_corr, axis=0), label="Correct response unit, correct trial", color='r', lw=3.)
-        plt.plot(x, np.mean(preSMA_AS_err_corr, axis=0), label="Error response unit, correct trial", color='b', lw=3.)
-        plt.plot(x, np.mean(preSMA_AS_corr_err, axis=0), label="Correct response unit, error trial", color='c', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_err_corr, axis=0), label="Correct response unit, error trial", color='b', lw=3.)
+        plt.plot(x, np.mean(preSMA_AS_corr_err, axis=0), label="Error response unit, correct trial", color='c', lw=3.)
         plt.plot(x, np.mean(preSMA_AS_err_err, axis=0), label="Error response unit, error trial", color='k', lw=3.)
 
-	#plt.xlabel('Cycles around response')
+	plt.xlabel('ms from stimulus onset')
 	plt.ylabel('FEF activity')
 	#plt.title('pre-SMA activity during pro- and anti-saccades')
         plt.axvline(x=0, color='k')
-	plt.legend(loc=0, fancybox=True)
+	plt.legend(loc=4, fancybox=True)
 
 
     def analyse_ACC_act(self, tag=None):
@@ -1294,50 +1347,16 @@ class SaccadeBaseCycle(emergent.BaseCycle):
             pass
         #plt.legend(loc=0)
 
-#@pools.register_group(['flanker', 'cycle'])
-class FlankerCycle(SaccadeBaseCycle):
+@pools.register_group(['saccade', 'cycle', 'brown'])
+class SaccadeCycleBrown(SaccadeBaseCycle):
     def __init__(self, **kwargs):
-        super(FlankerCycle, self).__init__(task='FLANKER', **kwargs)
+        super(SaccadeCycleBrown, self).__init__(pre_trial_cue=True, **kwargs)
+        self.flags[-1]['brown_indirect'] = True
 
     def analyze(self):
-        self.plot_RT_histo()
-	self.save_plot("RT_histo")
-
-	self.new_fig()
-	self.analyse_preSMA_act()
-	self.save_plot("preSMA_act")
-
         self.new_fig()
-	self.analyse_ACC_act()
-	self.save_plot("ACC_act")
-
-        #self.new_fig()
-	#self.analyse_ACC_act(tag='NE_tonic')
-	#self.save_plot("ACC_act_tonic")
-
-        #self.new_fig()
-	#self.analyse_ACC_diff()
-	#self.save_plot("ACC_diff")
-
-	self.new_fig()
-	self.analyse_STN_act()
-	self.save_plot("STN_act")
-
-    def analyse_ACC_diff(self):
-	wind = (100,150)
-
-        preSMA_AS_corr, preSMA_AS_err = self.analyse_AS_correct_error('ACC_act', wind=wind, center='minus_cycles')
-        preSMA_PS, preSMA_AS = self.analyse_PS_AS('ACC_act', wind=wind, center='minus_cycles')
-
-        ACC_diff = preSMA_AS_err.mean(axis=0) - preSMA_AS_corr.mean(axis=0)
-	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        plt.plot(x, ACC_diff, label="Incongruent error-correct", color='g', lw=2)
-        #plt.plot(x, preSMA_PS, label="Congruent", color='b')
-	plt.xlabel('Cycles around response')
-	plt.ylabel('error - correct')
-	plt.title('ACC activity during pro- and anti-saccades')
-        plt.axvline(x=0, color='k')
-	plt.legend(loc=0, fancybox=True)
+        self.analyse_Go_NoGo_left_right()
+        self.save_plot('striatum')
 
 @pools.register_group(['saccade', 'cycle', 'intact'])
 class SaccadeCyclePreTrial(SaccadeBaseCycle):
@@ -1360,3 +1379,88 @@ class SaccadeCycleSCSTN(SaccadeBaseCycle):
 	self.analyse_STN_act(center=True)
 	self.save_plot("STN_act_response_aligned")
 
+
+@pools.register_group(['saccade', 'prepotent', 'PFC', 'cycle'])
+class SaccadePrepotentPFCConflict(SaccadeBaseCycle):
+    def __init__(self, start=-.1, stop=.1, samples=4, **kwargs):
+        super(self.__class__, self).__init__(**kwargs)
+        self.set_flags_condition('prepotent_bias_pfc', start, stop, samples)
+
+
+    def analyze(self):
+        self.new_fig()
+        self.analyse_prepotent('ACC_act')
+	plt.ylabel('Average conflict activity')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+        self.save_plot('prepotent_ACC')
+
+        self.new_fig()
+        self.analyse_prepotent('PFC_acts_avg')
+	plt.ylabel('Average conflict activity')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+        self.save_plot('prepotent_DLPFC')
+
+        self.new_fig()
+        self.analyse_prepotent('ACC_act', func=np.std)
+	plt.ylabel('Std conflict activity')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+        self.save_plot('prepotent_ACC_std')
+
+        self.new_fig()
+        self.analyse_prepotent('PFC_acts_avg', func=np.std)
+	plt.ylabel('Std conflict activity')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+        self.save_plot('prepotent_DLPFC_std')
+
+    def analyse_prepotent(self, layer, func=None):
+        if func is None:
+            func = np.mean
+
+	wind = (100,150)
+
+        for i, tag in enumerate(self.tags):
+            if tag == 'intact':
+                continue
+            preSMA_AS_corr, preSMA_AS_err = self.analyse_AS_correct_error(layer, wind=wind, center='minus_cycles', tag=tag)
+            preSMA_PS, preSMA_AS = self.analyse_PS_AS(layer, wind=wind, center='minus_cycles', tag=tag)
+
+            x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
+            alpha = (i+1.)/len(self.tags)
+            plt.plot(x, func(preSMA_AS_corr, axis=0), label=str(alpha), color='r', lw=3., alpha=alpha)
+            plt.plot(x, func(preSMA_AS_err, axis=0), color='b', lw=3., alpha=alpha)
+            plt.plot(x, func(preSMA_PS, axis=0), color='k', lw=3., alpha=alpha)
+
+	#plt.xlabel('Cycles around response')
+	plt.ylabel('Average DLPFC activity')
+	#plt.title('pre-SMA activity during pro- and anti-saccades')
+        plt.axvline(x=0, color='k')
+	plt.legend(loc=0, fancybox=True)
+
+
+@pools.register_group(['saccade', 'fast', 'PFC', 'conf'])
+class SaccadePrepotentFastDLPFC(Saccade):
+    def __init__(self, **kwargs):
+        super(self.__class__, self).__init__(**kwargs)
+        self.flags[-1]['DLPFC_speed_mean_mod'] = 1
+
+
+    def analyze(self):
+        self.new_fig()
+	self.plot_RT_histo(ylim_max=54)
+	self.save_plot("RT_histo")
+
+@pools.register_group(['saccade', 'fast', 'PFC', 'noconf'])
+class SaccadePrepotentFastDLPFCNoConf(Saccade):
+    def __init__(self, **kwargs):
+        super(self.__class__, self).__init__(proj_name='BG_inhib8_fast_pfc',**kwargs)
+        self.flags[-1]['DLPFC_speed_mean_mod'] = 1
+
+
+    def analyze(self):
+        self.new_fig()
+	self.plot_RT_histo(ylim_max=54)
+	self.save_plot("RT_histo")

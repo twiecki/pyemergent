@@ -165,6 +165,24 @@ class Base(object):
 	savefig(self.plot_prefix_eps + name + ".eps")
 	savefig(self.plot_prefix_pdf + name + ".pdf")
 
+    def set_flags_condition(self, condition, start, stop, samples, tag=None):
+        self.x = np.linspace(start, stop, samples)
+        self.condition = condition
+        for i in self.x:
+            if type(condition) is list:
+                for c in condition:
+                    self.flag[c] = i
+            else:
+                self.flag[condition] = i
+            if tag is None:
+                tag_name = '%s_%.4f' % (condition, i)
+            else:
+                tag_name = '%s_%.4f' % (tag, i)
+            self.tags.append(tag_name)
+            self.flag['tag'] = '_' + tag_name
+            self.flags.append(copy(self.flag))
+
+
 def fit_hddm((data, depends_on)):
     import hddm
     import hddm.sandbox
@@ -183,6 +201,22 @@ def fit_hddm((data, depends_on)):
     stats = model.stats()
     stats['logp'] = model.mc.logp
     return stats
+
+def fit_hddm_no_deps(data, switch=True, bias=False):
+    import hddm
+    import hddm.sandbox
+
+    # Select only antisaccade trials
+    data = data[data['instruct']==1]
+
+    if switch:
+        model = hddm.sandbox.HDDMSwitch(data)
+    else:
+        model = hddm.HDDM(data, bias=bias)
+
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
 
 def fit_hddm_stop((data, depends_on)):
     import hddm

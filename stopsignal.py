@@ -208,7 +208,7 @@ class StopSignalBase(emergent.Base):
 	for t,tag in enumerate(self.tags):
 	    self._preprocess_data(self.data[tag], tag)
 
-    def plot_RT_dist_SSD(self):
+    def plot_RT_dist_SSD(self, bins=65, lower=200, upper=1000):
         for tag in self.tags:
             data = self.data[tag]
             ssds = np.unique(data['SSD'][data['SSD'] != -1])
@@ -216,16 +216,46 @@ class StopSignalBase(emergent.Base):
             ax = fig.add_subplot(len(ssds) + 1, 1, 1)
             max_rt = data[data['inhibited'] == False]['minus_cycles'].max() * self.ms*3
             go_rts = data[(data['SS_presented'] == False) & (data['inhibited'] == False)]['minus_cycles'] * self.ms*3
-            ax.hist(go_rts, range=(0, max_rt), bins=100)
+            ax.hist(go_rts, range=(lower, upper), bins=bins)
+            plt.setp(ax.get_yticklabels(), visible=False)
+            plt.setp(ax.get_xticklabels(), visible=False)
+            ax.set_ylabel('Go')
             for i, ssd in enumerate(ssds):
                 go_rts = data[(data['SSD'] == ssd) & (data['inhibited'] == False)]['minus_cycles'] * self.ms*3
                 if len(go_rts) == 0:
                     continue
 
                 ax = fig.add_subplot(len(ssds) + 1, 1, i+2)
-                ax.hist(go_rts, range=(0, max_rt), bins=100)
-                ax.axvline(ssd * self.ms * 3)
+                ax.hist(go_rts, range=(lower, upper), bins=bins)
+                ax.axvline(ssd * self.ms * 3, color='r', lw=2.)
+                ax.axvline(ssd* self.ms * 3 + 200, color='k', lw=2.)
+                ax.yaxis.offsetText.set_visible(False)
+                ax.set_ylabel('%.0f'%(ssd*self.ms*3))
+                plt.setp(ax.get_yticklabels(), visible=False)
+                plt.setp(ax.get_xticklabels(), visible=False)
+
+            plt.setp(ax.get_xticklabels(), visible=True)
+            ax.set_xlabel('RT (ms)')
             self.save_plot('RT_dist_SSD_%s' % tag)
+
+    def plot_SSD_vs_inhib(self, tag='intact'):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        data = self.data[tag]
+        ssds = np.unique(data['SSD'][data['SSD'] != -1])
+        p_inhib = []
+
+        for i, ssd in enumerate(ssds):
+            go_trials = float(len(data[(data['SSD'] == ssd) & (data['inhibited'] == False)]))
+            inhib_trials = len(data[(data['SSD'] == ssd) & (data['inhibited'] == True)])
+            if (go_trials+inhib_trials) == 0:
+                p_inhib.append(0)
+            else:
+                p_inhib.append(inhib_trials / (go_trials+inhib_trials))
+
+        ax.plot(np.asarray(ssds)*self.ms*3, p_inhib, lw=2., color='k')
+        ax.set_xlabel('Stop-Signal delay')
+        ax.set_ylabel('Probability of inhibition')
 
     def plot_staircase(self):
 	for t,(tag, color) in enumerate(zip(self.tags, ['k', '.7'])):
@@ -406,19 +436,6 @@ class StopSignalBase(emergent.Base):
 	    plt.xlabel('RT')
 	    i+=3
 
-    def plot_SSD_vs_inhib(self, i, tag):
-        data_mean, data_sem = emergent.group_batch(self.data[tag], ['SSD', 'SS_presented'])
-        idx = data_mean['SS_presented'] == 1
-        plt.errorbar(data_mean['SSD'][idx],
-                     data_mean['inhibited'][idx],
-                     yerr = data_sem['inhibited'][idx],
-                     #color=colors[i],
-                     label=self.names[i], lw=self.lw)
-
-	plt.title('IFG lesion effects on response inhibition')
-	plt.xlabel('SSD')
-	plt.ylabel('P(inhib|signal)')
-	plt.legend(loc=0, fancybox=True)
 
 @pools.register_group(['stopsignal', 'all','nocycle'])
 class StopSignal(StopSignalBase):
@@ -449,11 +466,13 @@ class StopSignal(StopSignalBase):
         self.plot_seq_effects()
         self.save_plot('seq_effects')
 
+
+
         #self.new_fig()
         #self.plot_staircase()
         #self.save_plot('staircase')
 
-@pools.register_group(['stopsignal', 'staircase'])
+@pools.register_group(['stopsignal', 'staircase', 'nocycle'])
 class StopSignalStaircase(StopSignalBase):
     def __init__(self, **kwargs):
         super(StopSignalStaircase, self).__init__(intact=True, NE=False, STN=False, PD=False, motivation=False, IFG=True, **kwargs)
@@ -471,7 +490,7 @@ class StopSignalStaircase(StopSignalBase):
         self.plot_staircase()
         self.save_plot('staircase')
 
-@pools.register_group(['stopsignal', 'cycle'])
+@pools.register_group(['stopsignal', 'cycle', 'staircase'])
 class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
     def __init__(self, **kwargs):
 	super(StopSignal_cycle, self).__init__(**kwargs)
@@ -518,6 +537,10 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
         self.save_plot("STN_act")
 
         self.new_fig()
+        self.analyze_act_SS_onset(name='Executive control', field='PFC_acts_avg', wind=(20, 100))
+        self.save_plot("PFC_act")
+
+        self.new_fig()
         self.analyze_act_SS_onset(name='ACC', field='ACC_act', wind=(20, 100))
         self.save_plot("ACC_act_SS_onset")
 
@@ -558,12 +581,14 @@ class StopSignal_cycle(emergent.BaseCycle, StopSignalBase):
 	    center='SSD',
 	    wind=wind)
 
-	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)
-        plt.plot(x, np.mean(ss_inhib, axis=0), label='SS_inhib', color='g', lw=3)
-        plt.plot(x, np.mean(ss_resp, axis=0), label='SS_resp', color='r', lw=3.)
-	plt.xlabel('Cycles around Stop-Signal')
+	x=np.linspace(-wind[0],wind[1],np.sum(wind)+1)*self.ms
+        plt.axvline(0, color='k')
+        plt.plot(x, np.mean(ss_inhib, axis=0), label='SS inhibit', color='b', lw=3)
+        plt.plot(x, np.mean(ss_resp, axis=0), label='SS response', color='r', lw=3.)
+        plt.axvline(self.SSRT['intact'][0]*self.ms, color='k', linestyle='--')
+	plt.xlabel('Time from stop-signal onset (ms)')
 	plt.ylabel('Average %s activity' % name)
-	plt.legend(loc=0, fancybox=True)
+        plt.legend(loc=0, fancybox=True)
 
     def analyze_act_stim_onset(self, name='SC', field='Thalam_unit_corr', tag='intact'):
         start_cycle = 0
@@ -748,6 +773,9 @@ class StopSignal_cycle_post(StopSignal_cycle):
         self.new_fig()
         self.analyze_act_post(nucleus='IFG')
         self.save_plot('IFG_post_ss')
+
+
+
 
 @pools.register_group(['stopsignal2', 'cycle', 'post'])
 class StopSignal_cycle_post2(StopSignal_cycle):
@@ -1012,7 +1040,14 @@ class StopSignalLong(StopSignalDDMBase):
     def analyze(self):
         self.plot_RT_dist_SSD()
         self.hddm_data['rt'] *= 3
-        self.fit_and_analyze_ddm()
+        #self.fit_and_analyze_ddm()
+
+        self.new_fig()
+        self.plot_SSD_vs_inhib()
+        self.save_plot('SSD_vs_inhib')
+
+        self.new_fig()
+        self.plot
 
     def fit_and_analyze_ddm(self):
         #from multiprocessing import Pool
@@ -1024,3 +1059,27 @@ class StopSignalLong(StopSignalDDMBase):
         model.sample(25000, burn=20000)
         model.print_stats()
         model.plot_posteriors()
+
+
+@pools.register_group(['stopsignal', 'cycle', 'ssd'])
+class StopSignal_cycle_ssd(StopSignal_cycle):
+    def __init__(self, **kwargs):
+        super(StopSignal_cycle_ssd, self).__init__(intact=True, SS_prob=.85, **kwargs)
+        #self.flags[-1]['test_SSD_mode'] = True
+
+    def analyze(self):
+        self.new_fig()
+        self.analyze_act_SS_onset(name='STN', field='STN_acts_avg', wind=(20, 50))
+        self.save_plot('STN_onset')
+
+        self.new_fig()
+        self.analyze_act_SS_onset(name='SNr', field='GP_Int_acts_avg', wind=(20, 50))
+        self.save_plot('SNr_onset')
+
+        # self.new_fig()
+        # self.analyze_act_SS_onset(name='SNr', field='GP_Ext_acts_avg')
+        # self.save_plot('SNr_onset')
+
+        self.new_fig()
+        self.analyze_act_SS_onset(name='IFG', field='IFG_acts_avg', wind=(20, 50))
+        self.save_plot('IFG_onset')
