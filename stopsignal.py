@@ -394,7 +394,7 @@ class StopSignalBase(emergent.Base):
             upper = 150
 
             inhib_prob = np.mean(self.data[tag][self.data[tag]['SS_presented'] == 1]['inhibited'])
-            x = np.linspace(0, upper, bins)
+            x = np.linspace(0, 400, bins)
             cdf_go = np.cumsum(np.histogram(data_settled[data_settled['SS_presented'] == 0]['minus_cycles'], density=True, bins=bins, range=(0, upper))[0])
 
             cdf_go /= cdf_go[-1]
@@ -404,16 +404,17 @@ class StopSignalBase(emergent.Base):
             cdf_ss /= cdf_ss[-1]
             cdf_ss *= inhib_prob
 
-
-            plt.plot(x*self.ms, cdf_go, color='k', label='Go trials')
-            plt.plot(x*self.ms, cdf_ss, color='g', label='Stop trials')
+            plt.plot(x, cdf_go, color='k', label='Go trials', lw=2.)
+            plt.plot(x, cdf_ss, color='g', label='Stop trials', lw=2.)
             plt.legend(loc=0)
-            plt.axhline(inhib_prob, color='b', linestyle='--')
-            plt.axvline(np.mean(self.SSD[tag])*self.ms, color='r', linestyle='-')
-            plt.axvline((np.mean(self.SSD[tag])+np.mean(self.SSRT[tag]))*self.ms, color='r', linestyle='--')
+            plt.axhline(inhib_prob, color='b', linestyle='--', lw=2.)
+            plt.axvline(np.median(self.SSD[tag])*self.ms, color='r', linestyle='-', lw=2.)
+            plt.axvline((np.median(self.SSD[tag])+np.mean(self.SSRT[tag]))*self.ms, color='r', linestyle='--', lw=2.)
 	    plt.xlabel('RT (ms)')
             plt.ylabel('Cumulative probability')
             plt.title('Model %s' % tag)
+            plt.xlim((100, 400))
+
 
 
     def plot_RT_dist(self):

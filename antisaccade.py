@@ -223,10 +223,10 @@ class Saccade(emergent.Base):
 
             quant, cdf = self.quantize_cdf(data)
             # Plot
-            plt.plot(quant, cdf, label=tag, color=self.colors[i])
-            plt.plot(quant, cdf, 'o', color=self.colors[i])
+            plt.plot(quant*self.ms, cdf, label=tag, color=self.colors[i])
+            plt.plot(quant*self.ms, cdf, 'o', color=self.colors[i])
 
-        plt.xlabel('Mean RT')
+        plt.xlabel('Mean RT (ms)')
         plt.ylabel('Accuracy (%)')
         plt.legend(loc=0, fancybox=True)
 
@@ -489,7 +489,12 @@ class SaccadeNE(Saccade):
 @pools.register_group(['saccade', 'pretrial', 'nocycle'])
 class Saccade_pretrial(Saccade):
     def __init__(self, SZ=False, **kwargs):
-	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=True, STN=True, pretrial=False, dlpfc_connectivity=True, max_epoch=50, **kwargs)
+	super(Saccade_pretrial, self).__init__(pre_trial_cue=True, SZ=True, PD=True, NE=False, STN=True, pretrial=False, dlpfc_connectivity=True, max_epoch=50, **kwargs)
+
+@pools.register_group(['saccade2', 'pretrial', 'nocycle'])
+class Saccade_pretrial2(Saccade):
+    def __init__(self, SZ=False, **kwargs):
+	super(Saccade_pretrial, self).__init__(proj_name='BG_inhib9.proj', pre_trial_cue=True, SZ=True, PD=True, NE=False, STN=True, pretrial=False, dlpfc_connectivity=True, max_epoch=50, **kwargs)
 
 
 @pools.register_group(['flanker', 'pretrial', 'nocycle'])
@@ -1453,11 +1458,15 @@ class SaccadePrepotentFastDLPFC(Saccade):
 	self.plot_RT_histo(ylim_max=54)
 	self.save_plot("RT_histo")
 
+        self.new_fig()
+        self.plot_RT_vs_accuracy()
+	self.save_plot("RT_vs_accuracy")
+
 @pools.register_group(['saccade', 'fast', 'PFC', 'noconf'])
 class SaccadePrepotentFastDLPFCNoConf(Saccade):
     def __init__(self, **kwargs):
         super(self.__class__, self).__init__(proj_name='BG_inhib8_fast_pfc',**kwargs)
-        self.flags[-1]['DLPFC_speed_mean_mod'] = 1
+        #self.flags[-1]['DLPFC_speed_mean_mod'] = 1
 
 
     def analyze(self):

@@ -1,9 +1,17 @@
 from __future__ import with_statement
 import matplotlib
 
+#try:
+#    import matplotlib
+#    matplotlib.use('Agg')
+    #import matplotlib.pyplot as plt
+#except:
+#    print "Could not load pyplot"
+
 import numpy as np
 import sys, os
 
+from math import ceil
 from copy import copy
 
 try:
@@ -20,8 +28,15 @@ def sem(x, axis=0):
     return s
 
 class Base(object):
-    def __init__(self, proj_name, prefix, batches=8, log_dir=None, log_dir_abs=None, debug=None, plot=True):
+    def __init__(self, proj_name=None, batches=8, prefix=None, log_dir=None, log_dir_abs=None, debug=None, plot=True):
+	if proj_name is None:
+	    #proj_name = 'BG_response_inhib_preSMA_inhib_fixation'
+	    #proj_name = 'BG_IFG_striatum_split_salience4'
+            proj_name = 'BG_inhib8'
 	self.proj = proj_name
+
+	if prefix is None:
+	    prefix = '/home/wiecki/working/projects/bg_inhib/'
 	self.prefix = prefix
 	self.batches = batches
 	self.data = {}
@@ -30,21 +45,30 @@ class Base(object):
 	self.flags = []
         self.lw = 2.
 
+	#self.log_dir_emergent = os.path.join('logs', self.__class__.__name__)
         if log_dir is None:
             self.log_dir = os.path.join(self.prefix, 'logs', self.__class__.__name__)
         elif log_dir_abs is not None:
             self.log_dir = os.path.join(log_dir_abs, self.__class__.__name__)
         else:
             self.log_dir = os.path.join(self.prefix, log_dir, self.__class__.__name__)
-
 	self.plot_prefix_png = self.prefix + 'plots/png/' + self.__class__.__name__ + '_'
 	self.plot_prefix_eps = self.prefix + 'plots/eps/' + self.__class__.__name__ + '_'
 	self.plot_prefix_pdf = self.prefix + 'plots/pdf/' + self.__class__.__name__ + '_'
 	self.colors = ('k','r','b','y','c','g','m','w')
 
+	self.ddms = {}
+	self.ddms_results = {}
+	#self.hhm = hhm.hhm()
+
         self.flag = {'proj': self.prefix+self.proj + '.proj',
 		     'log_dir': self.log_dir,
-		     'batches': 1}
+		     'batches': 1,
+                     'SZ_mode': 'false',
+                     #'rnd_init': 'OLD_SEED',
+                     'LC_mode': 'tonic',
+                     'tonic_NE': 0.8,
+                     'motivational_bias': 'NO_BIAS'}
 
         if debug is not None:
             self.flag['debug'] = debug
@@ -126,7 +150,9 @@ class Base(object):
         from pylab import figure, subplot
 	fig = figure(**kwargs)
 	ax = subplot(111)
+	#ax.spines['left'].set_position('center')
 	ax.spines['right'].set_color('none')
+	#ax.spines['bottom'].set_position('center')
 	ax.spines['top'].set_color('none')
 	ax.xaxis.set_ticks_position('bottom')
 	ax.yaxis.set_ticks_position('left')
@@ -156,6 +182,57 @@ class Base(object):
             self.flag['tag'] = '_' + tag_name
             self.flags.append(copy(self.flag))
 
+
+def fit_hddm((data, depends_on)):
+    import hddm
+    import hddm.sandbox
+
+    # Select only antisaccade trials
+    data = data[data['instruct']==1]
+
+    model = hddm.sandbox.HDDMSwitch(data, depends_on=depends_on, is_group_model=False, init=True)
+
+    model.create_nodes()
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
+    print "Logp: %f" % model.mc.logp
+    #hddm.utils.plot_posteriors(model)
+    stats = model.stats()
+    stats['logp'] = model.mc.logp
+    return stats
+
+def fit_hddm_no_deps(data, switch=True, bias=False):
+    import hddm
+    import hddm.sandbox
+
+    # Select only antisaccade trials
+    data = data[data['instruct']==1]
+
+    if switch:
+        model = hddm.sandbox.HDDMSwitch(data)
+    else:
+        model = hddm.HDDM(data, bias=bias)
+
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
+
+def fit_hddm_stop((data, depends_on)):
+    import hddm
+    from hddm.sandbox.model_stopddm import StopDDM
+
+    model = StopDDM(data.to_records(), depends_on=depends_on, is_group_model=False)
+
+    model.create_nodes()
+    model.map(runs=3)
+    model.sample(7000, burn=2000)
+    model.print_stats()
+    print "Logp: %f" % model.mc.logp
+    #hddm.utils.plot_posteriors(model)
+    stats = model.stats()
+    stats['logp'] = model.mc.logp
+    return stats
 
 
 class BaseCycle(Base):
@@ -262,6 +339,7 @@ def convert_header_np(fname):
     Returns a dict."""
     dt = []
     mask = []
+    idx = 0
 
     with open(fname) as f:
         line = f.readline()
@@ -443,6 +521,7 @@ def usage():
 
 def main():
     import getopt
+    import pools
 
     # Set defaults
     mpi = False
@@ -507,4 +586,7 @@ def main():
             pool.analyze()
 
 if __name__ == '__main__':
+    #import doctest
+    #doctest.testmod()
+
     main()

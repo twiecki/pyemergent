@@ -1,28 +1,14 @@
 from __future__ import with_statement
 import subprocess
-import os
 import sys
 import time
-import numpy as np
-
-from copy import copy
-from glob import glob
-from math import ceil
-
-try:
-    import matplotlib
-    import matplotlib.pyplot as plt
-except:
-    print "Could not load pyplot"
+import math
 
 try:
     from IPython.Debugger import Tracer; debug_here = Tracer()
 except:
     def debug_here(): pass
 
-
-import time
-import math
 # Retry decorator with exponential backoff
 def retry(tries, delay=3, backoff=2):
   """Retries a function or method until it returns True.
@@ -220,7 +206,7 @@ class PoolMPI(Pool):
                     print 'Process %i exited' % status.source
                     print 'Processes left: ' + str(process_list)
             else:
-                print 'Unkown tag %i with msg %s' % (status.tag, str(data))
+                print 'Unkown tag %i with msg %s' % (status.tag, str(recv))
 
             if len(process_list) == 0:
                 self.pbar.finish()
@@ -338,13 +324,6 @@ class RegisteredModels(object):
     def __init__(self):
         self.registered_models = {}
         self.groups = {}
-
-    # def register(self):
-    #     """Register model so that it can be run automatically by
-    #     calling the pools.run() function."""
-    #     self.registered_models.add(model)
-
-    #     return model
 
     def register_group(self, groups):
         def reg(model):
